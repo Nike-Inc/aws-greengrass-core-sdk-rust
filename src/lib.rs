@@ -5,13 +5,11 @@
 pub mod context;
 pub mod error;
 pub mod runtime;
+pub mod request;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use crate::error::GGError;
-use std::ffi::CString;
-use std::os::raw::c_void;
-use std::ptr;
 
 pub fn init() -> Result<(), GGError> {
     unsafe {

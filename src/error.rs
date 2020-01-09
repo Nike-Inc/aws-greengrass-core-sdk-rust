@@ -2,6 +2,8 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use std::error::Error;
 use std::fmt;
+use std::ffi;
+use std::convert::From;
 
 #[derive(Debug)]
 pub enum GGError {
@@ -10,6 +12,7 @@ pub enum GGError {
     InvalidState,
     InternalFailure,
     Terminate,
+    NulError(ffi::NulError),
     Unknown,
 }
 
@@ -31,9 +34,22 @@ impl GGError {
 
 impl fmt::Display for GGError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // placeholder
-        write!(f, "GGError: UNKNOWN")
+        match self {
+            Self::OutOfMemory => write!(f, "Process out of memory"),
+            Self::InvalidParameter => write!(f, "Invalid input Parameter"),
+            Self::InvalidState => write!(f, "Invalid State"),
+            Self::InternalFailure => write!(f, "Internal Failure"),
+            Self::Terminate => write!(f, "Remote signal to terminate received"),
+            Self::NulError(ref e) => write!(f, "{}", e),
+            _ => write!(f, "Unknown Error Occurred"),
+        }
     }
 }
 
 impl Error for GGError {}
+
+impl From<ffi::NulError> for GGError {
+    fn from(e: ffi::NulError) -> Self {
+        GGError::NulError(e)
+    }
+}

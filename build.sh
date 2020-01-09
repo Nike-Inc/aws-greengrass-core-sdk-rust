@@ -4,9 +4,9 @@ NAME=aws_greengrass_core_sdk_rust
 
 usage() {
   cat << EOF >&2
-Usage: $PROGNAME [-nocache]
+Usage: $PROGNAME [-c]
 
- -nocache : ...
+ -c : clear docker cache
 
 EOF
   exit 1
@@ -14,9 +14,9 @@ EOF
 
 
 dir=default_dir file=default_file verbose_level=0
-while getopts nocache o; do
+while getopts c o; do
   case $o in
-    (nocache) nocache="--no-cache";;
+    (c) nocache="--no-cache";;
     # (d) dir=$OPTARG;;
     # (v) verbose_level=$((verbose_level + 1));;
     (*) usage
@@ -24,7 +24,9 @@ while getopts nocache o; do
 done
 shift "$((OPTIND - 1))"
 
-docker build $1 -t $NAME .
+mkdir ./target > /dev/null 2>&1
+
+docker build $nocache $1 -t $NAME .
 
 docker run --rm -v $(pwd):/data $NAME
 

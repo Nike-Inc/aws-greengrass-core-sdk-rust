@@ -17,13 +17,17 @@ RUN apt-get update && \
     make && \
     make install 
 
+ARG CARGO_VERSION
+
+ENV LLVM_CONFIG_PATH "/usr/lib/llvm-7/bin/llvm-config"
+
 WORKDIR /build
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
 COPY ./build.rs ./build.rs
 COPY ./wrapper.h ./wrapper.h
 RUN mkdir src && \
-    echo "fn main() {println!(\"if you see this, the build broke\")}" > src/main.rs
+    echo "fn main() {println!(\"if you see this, the build broke: ${CARGO_VERSION}\")}" > src/main.rs
 RUN cargo build --release
 
 # FROM rust:1.40

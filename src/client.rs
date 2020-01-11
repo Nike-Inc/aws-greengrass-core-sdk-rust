@@ -6,24 +6,16 @@ use std::ptr;
 
 use crate::error::GGError;
 
-pub struct Request {
-    topic: String,
-}
+pub struct IOTDataClient;
 
-impl Request {
-    pub fn new(topic: &str) -> Self {
-        Request {
-            topic: topic.to_owned(),
-        }
-    }
+impl IOTDataClient {
 
-    pub fn publish(&self, message: &[u8], size: usize) -> Result<(), GGError> {
+    pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> Result<(), GGError> {
         unsafe {
             let mut req: gg_request = ptr::null_mut();
             let req_init = gg_request_init(&mut req);
             GGError::from_code(req_init)?;
 
-            let topic: &str = &self.topic;
             let topic_c = CString::new(topic).map_err(GGError::from)?;
             let mut res = gg_request_result {
                 request_status: gg_request_status_GG_REQUEST_SUCCESS,
@@ -32,8 +24,8 @@ impl Request {
             let pub_res = gg_publish(
                 req,
                 topic_c.as_ptr(),
-                message as *const _ as *const c_void,
-                size,
+                buffer as *const _ as *const c_void,
+                read,
                 &mut res,
             );
             GGError::from_code(pub_res)?;
@@ -43,4 +35,24 @@ impl Request {
         }
         Ok(())
     }
+    
+    pub fn publish<T: AsRef<[u8]>>(topic: &str, message: T) -> Result<(), GGError> {
+        let as_bytes = message.as_ref();
+        let size = as_bytes.len();
+        Self::publish_raw(topic, as_bytes, size)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_publish_str() {
+        let topic = "foo";
+        let message = "this is my message";
+        IOTDataClient::publish(topic, message).unwrap();        
+    }
+
 }

@@ -4,7 +4,7 @@
 
 pub mod context;
 pub mod error;
-pub mod request;
+pub mod client;
 pub mod runtime;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

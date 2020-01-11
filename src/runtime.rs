@@ -10,7 +10,7 @@ pub enum RuntimeOption {
 impl RuntimeOption {
     fn as_opt(&self) -> gg_runtime_opt {
         match self {
-            Async => 1,
+            Self::Async => 1,
         }
     }
 }

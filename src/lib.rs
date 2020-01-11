@@ -4,8 +4,8 @@
 
 pub mod context;
 pub mod error;
-pub mod runtime;
 pub mod request;
+pub mod runtime;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -18,7 +18,6 @@ pub struct Initializer {
 }
 
 impl Initializer {
-
     pub fn init(self) -> Result<(), GGError> {
         unsafe {
             let init_res = gg_global_init(0);
@@ -28,17 +27,14 @@ impl Initializer {
     }
 
     pub fn with_runtime(self, runtime: Runtime) -> Self {
-        Initializer {
-            runtime,
-            ..self
-        }
+        Initializer { runtime, ..self }
     }
 }
 
 impl Default for Initializer {
     fn default() -> Self {
         Initializer {
-            runtime: Runtime::default()
+            runtime: Runtime::default(),
         }
     }
 }

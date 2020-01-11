@@ -16,19 +16,18 @@ impl RuntimeOption {
 }
 
 pub struct Runtime {
-    runtime_option: RuntimeOption
+    runtime_option: RuntimeOption,
 }
 
 impl Default for Runtime {
     fn default() -> Self {
         Runtime {
-            runtime_option: RuntimeOption::Async
+            runtime_option: RuntimeOption::Async,
         }
     }
 }
 
 impl Runtime {
-
     pub fn start(self) -> Result<(), GGError> {
         unsafe {
             // todo - support handlers
@@ -47,5 +46,4 @@ impl Runtime {
             ..self
         }
     }
-
 }

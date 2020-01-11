@@ -1,11 +1,11 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::error::Error;
-use std::fmt;
-use std::ffi;
 use std::convert::From;
-use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::convert::Into;
+use std::error::Error;
+use std::ffi;
+use std::fmt;
+use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 
 #[derive(Debug)]
 pub enum GGError {

@@ -11,10 +11,9 @@ pub struct Request {
 }
 
 impl Request {
-
     pub fn new(topic: &str) -> Self {
         Request {
-            topic: topic.to_owned()
+            topic: topic.to_owned(),
         }
     }
 
@@ -29,8 +28,14 @@ impl Request {
             let mut res = gg_request_result {
                 request_status: gg_request_status_GG_REQUEST_SUCCESS,
             };
-    
-            let pub_res = gg_publish(req, topic_c.as_ptr(), message as *const _ as *const c_void, size, &mut res);
+
+            let pub_res = gg_publish(
+                req,
+                topic_c.as_ptr(),
+                message as *const _ as *const c_void,
+                size,
+                &mut res,
+            );
             GGError::from_code(pub_res)?;
 
             let close_res = gg_request_close(req);

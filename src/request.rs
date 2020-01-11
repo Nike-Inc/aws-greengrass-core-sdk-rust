@@ -18,7 +18,7 @@ impl Request {
         }
     }
 
-    pub fn publish(&self, message: &u8, size: usize) -> Result<(), GGError> {
+    pub fn publish(&self, message: &[u8], size: usize) -> Result<(), GGError> {
         unsafe {
             let mut req: gg_request = ptr::null_mut();
             let req_init = gg_request_init(&mut req);

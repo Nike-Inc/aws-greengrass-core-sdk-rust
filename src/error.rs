@@ -4,6 +4,8 @@ use std::error::Error;
 use std::fmt;
 use std::ffi;
 use std::convert::From;
+use std::io::{Error as IOError, ErrorKind as IOErrorKind};
+use std::convert::Into;
 
 #[derive(Debug)]
 pub enum GGError {
@@ -51,5 +53,11 @@ impl Error for GGError {}
 impl From<ffi::NulError> for GGError {
     fn from(e: ffi::NulError) -> Self {
         GGError::NulError(e)
+    }
+}
+
+impl Into<IOError> for GGError {
+    fn into(self) -> IOError {
+        IOError::new(IOErrorKind::Other, self)
     }
 }

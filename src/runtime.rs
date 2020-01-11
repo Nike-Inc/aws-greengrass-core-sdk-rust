@@ -1,6 +1,5 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use crate::context::LambdaContext;
 use crate::error::GGError;
 use std::default::Default;
 

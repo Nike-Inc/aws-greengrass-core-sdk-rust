@@ -6,6 +6,7 @@ pub mod context;
 pub mod error;
 pub mod client;
 pub mod runtime;
+pub mod log;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

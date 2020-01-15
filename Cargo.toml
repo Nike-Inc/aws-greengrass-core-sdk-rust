@@ -8,3 +8,5 @@ edition = "2018"
 bindgen = "0.52.0"
 
 [dependencies]
+log = "^0.4"
+lazy_static = "^1.4"

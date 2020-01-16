@@ -1,27 +1,5 @@
-FROM rust:1.40 as initial-build
+FROM artifactory.nike.com:9002/eap/rust-greengrass-base:v1
 
-RUN mkdir /build
-WORKDIR /build
-
-RUN apt-get update && \
-    apt-get install -y \
-        build-essential \        
-        clang \
-        cmake \
-        libuv1-dev && \
-    git clone https://github.com/aws/aws-greengrass-core-sdk-c.git && \
-    cd aws-greengrass-core-sdk-c && \
-    mkdir build && \
-    cd build && \
-    cmake .. && \
-    make && \
-    make install 
-
-ARG CARGO_VERSION
-
-ENV LLVM_CONFIG_PATH "/usr/lib/llvm-7/bin/llvm-config"
-
-WORKDIR /build
 ADD ./Cargo.toml ./Cargo.toml
 ADD ./Cargo.lock ./Cargo.lock
 ADD ./build.rs ./build.rs

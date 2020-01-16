@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use log::debug;
+use log::info;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
@@ -11,7 +11,7 @@ pub struct IOTDataClient;
 
 impl IOTDataClient {
     pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> Result<(), GGError> {
-        debug!("topic: {}, read: {:?}, buffer: {:?}", topic, read, buffer);
+        info!("topic: {}, read: {:?}, buffer: {:?}", topic, read, buffer);
 
         unsafe {
             let mut req: gg_request = ptr::null_mut();

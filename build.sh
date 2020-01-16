@@ -16,9 +16,9 @@ EOF
 
 command=""
 dir=default_dir file=default_file verbose_level=0
-while getopts "nc:c:" o; do
+while getopts "nc:" o; do
   case $o in
-    (nc) nocache="--no-cache";;
+    (n) nocache="--no-cache";;
     (c) command=${OPTARG};;
     # (d) dir=$OPTARG;;
     # (v) verbose_level=$((verbose_level + 1));;

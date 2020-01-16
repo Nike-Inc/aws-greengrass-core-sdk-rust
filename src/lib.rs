@@ -2,11 +2,11 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+pub mod client;
 pub mod context;
 pub mod error;
-pub mod client;
-pub mod runtime;
 pub mod log;
+pub mod runtime;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

@@ -1,5 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+use log::debug;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
@@ -9,8 +10,9 @@ use crate::error::GGError;
 pub struct IOTDataClient;
 
 impl IOTDataClient {
-
     pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> Result<(), GGError> {
+        debug!("topic: {}, read: {:?}, buffer: {:?}", topic, read, buffer);
+
         unsafe {
             let mut req: gg_request = ptr::null_mut();
             let req_init = gg_request_init(&mut req);
@@ -35,14 +37,13 @@ impl IOTDataClient {
         }
         Ok(())
     }
-    
+
     pub fn publish<T: AsRef<[u8]>>(topic: &str, message: T) -> Result<(), GGError> {
         let as_bytes = message.as_ref();
         let size = as_bytes.len();
         Self::publish_raw(topic, as_bytes, size)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -52,7 +53,6 @@ mod tests {
     fn test_publish_str() {
         let topic = "foo";
         let message = "this is my message";
-        IOTDataClient::publish(topic, message).unwrap();        
+        IOTDataClient::publish(topic, message).unwrap();
     }
-
 }

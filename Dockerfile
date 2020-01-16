@@ -1,7 +1,5 @@
 FROM rust:1.40 as initial-build
 
-ENV LLVM_CONFIG_PATH /usr/lib/llvm-7/bin/llvm-config
-
 RUN mkdir /build
 WORKDIR /build
 
@@ -19,19 +17,23 @@ RUN apt-get update && \
     make && \
     make install 
 
-WORKDIR /build
-COPY ./Cargo.toml ./Cargo.toml
-COPY ./Cargo.lock ./Cargo.lock
-COPY ./build.rs ./build.rs
-COPY ./wrapper.h ./wrapper.h
 ARG CARGO_VERSION
+
+ENV LLVM_CONFIG_PATH "/usr/lib/llvm-7/bin/llvm-config"
+
+WORKDIR /build
+ADD ./Cargo.toml ./Cargo.toml
+ADD ./Cargo.lock ./Cargo.lock
+ADD ./build.rs ./build.rs
+ADD ./wrapper.h ./wrapper.h
 RUN mkdir src && \
-    echo "fn main() {println!(\"if you see this, the build broke ${CARGO_VERSION}\")}" > src/main.rs
+    echo "fn foo() {println!(\"if you see this, the build broke: ${CARGO_VERSION}\")}" > src/lib.rs
 RUN cargo build --release
 
-COPY ./scripts/copyzip.sh ./
-COPY ./src ./src
-RUN cargo build --release
+ADD ./scripts/copytarget.sh ./
+ADD ./src ./src
+RUN touch src/lib.rs && \
+    cargo build --release
 
 VOLUME [ "/data" ]
-ENTRYPOINT [ "./copyzip.sh"]
+ENTRYPOINT [ "./copytarget.sh"]

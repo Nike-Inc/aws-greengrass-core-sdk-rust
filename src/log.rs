@@ -13,7 +13,7 @@ lazy_static! {
 pub struct GGLogger;
 
 impl Log for GGLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
+    fn enabled(&self, _: &Metadata) -> bool {
         true
     }
 

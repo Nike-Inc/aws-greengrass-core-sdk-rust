@@ -3,17 +3,24 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 use crate::error::GGError;
 use std::default::Default;
 use crate::handler::{Handler, LambdaContext, NoOpHandler};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::os::raw::c_void;
 use std::ffi::{CString, CStr};
 use log::error;
+use std::sync::Arc;
 use std::cell::RefCell;
+use crossbeam_channel::{unbounded, Sender, Receiver};
+use lazy_static::lazy_static;
 
 const BUFFER_SIZE: usize = 100;
 
-static mut HANDLER: Arc<RefCell<Handler>> = Arc::new(RefCell::new(NoOpHandler));
+type ShareableHandler = dyn Handler + Send + Sync;
+
+static SENDER: Arc<RefCell<Option<Sender<LambdaContext>>>> = init_sender();
+
+const fn init_sender() -> Arc<RefCell<Option<Sender<LambdaContext>>>> {
+    Arc::new(RefCell::new(None))
+}
+
 
 pub enum RuntimeOption {
     Async,
@@ -29,43 +36,46 @@ impl RuntimeOption {
 
 pub struct Runtime {
     runtime_option: RuntimeOption,
+    handler: Box<ShareableHandler>,
 }
 
 impl Default for Runtime {
     fn default() -> Self {
         Runtime {
-            runtime_option: RuntimeOption::Async
+            runtime_option: RuntimeOption::Async,
+            handler: Box::new(NoOpHandler),
         }
     }
 }
 
 impl Runtime {
-    pub fn start(self) -> Result<(), GCError> {
-        self.start_with_handler(NoOpHandler);
-    }
-
-    pub fn start_with_handler(self, handler: dyn Handler) -> Result<(), GGError> {
+    pub fn start(self) -> Result<(), GGError> {
         unsafe {
             // todo - support handlers
             // this will probably involve creating a handler with a channel that then
             // sends info to our handler function: https://doc.rust-lang.org/nomicon/ffi.html#asynchronous-callbacks
 
-            HANDLER.replace(handler)
+            // Arc::clone(&HANDLER).replace(self.handler);        
+
+            let (sender, receiver) = unbounded();    
+            Arc::clone(&SENDER).replace(Some(sender));
+
             
-                    
             extern "C" fn c_handler(c_ctx: *const gg_lambda_context) {
-                match build_context(c_ctx) {
-                    Ok(context) => {                        
-                        HANDLER.handler(context);
+                unsafe {
+                    match build_context(c_ctx) {
+                        Ok(context) => {                        
+                            // Arc::clone(&HANDLER).borrow().handle(context);
+                        }
+                        Err(e) => error!("Handler error: {}", e)
                     }
-                    Err(e) => error!("Handler error: {}", e)
                 }
             };
 
             
-            // extern "C" fn no_op_handler(_: *const gg_lambda_context) {};
-            // let start_res = gg_runtime_start(Some(no_op_handler), self.runtime_option.as_opt());
-            // GGError::from_code(start_res)?;
+            extern "C" fn no_op_handler(_: *const gg_lambda_context) {};
+            let start_res = gg_runtime_start(Some(no_op_handler), self.runtime_option.as_opt());
+            GGError::from_code(start_res)?;
         }
         Ok(())
     }
@@ -77,12 +87,13 @@ impl Runtime {
         }
     }
 
-    pub fn with_handler(self, handler: Option<Arc<dyn Handler>>) -> Self {
+    pub fn with_handler(self, handler: Box<ShareableHandler>) -> Self {
         Runtime {
             handler,
             ..self
         }
     }
+
 }
 
 pub(crate) unsafe fn build_context(c_ctx: *const gg_lambda_context) -> Result<LambdaContext, GGError> {

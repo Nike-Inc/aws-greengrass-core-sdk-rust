@@ -10,3 +10,4 @@ bindgen = "0.52.0"
 [dependencies]
 log = "^0.4"
 lazy_static = "^1.4"
+crossbeam-channel = "^0.4"

@@ -15,6 +15,7 @@ pub enum GGError {
     InternalFailure,
     Terminate,
     NulError(ffi::NulError),
+    InvalidString(ffi::IntoStringError),
     Unknown,
 }
 
@@ -43,16 +44,31 @@ impl fmt::Display for GGError {
             Self::InternalFailure => write!(f, "Internal Failure"),
             Self::Terminate => write!(f, "Remote signal to terminate received"),
             Self::NulError(ref e) => write!(f, "{}", e),
+            Self::InvalidString(ref e) => write!(f, "{}", e),
             _ => write!(f, "Unknown Error Occurred"),
         }
     }
 }
 
-impl Error for GGError {}
+impl Error for GGError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> { 
+        match self {
+            Self::NulError(ref e) => Some(e),
+            Self::InvalidString(ref e) => Some(e),
+            _ => None
+        }
+    }
+}
 
 impl From<ffi::NulError> for GGError {
     fn from(e: ffi::NulError) -> Self {
         GGError::NulError(e)
+    }
+}
+
+impl From<ffi::IntoStringError> for GGError {
+    fn from(e: ffi::IntoStringError) -> Self {
+        GGError::InvalidString(e)
     }
 }
 

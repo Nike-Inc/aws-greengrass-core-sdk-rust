@@ -4,7 +4,7 @@ use crate::error::GGError;
 use crate::handler::{Handler, LambdaContext};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use lazy_static::lazy_static;
-use log::error;
+use log::{error, info};
 use std::default::Default;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
@@ -87,14 +87,16 @@ impl Runtime {
 }
 
 /// c handler that performs a no op
-extern "C" fn no_op_handler(_: *const gg_lambda_context) {}
+extern "C" fn no_op_handler(_: *const gg_lambda_context) {
+    info!("No opt handler called!");
+}
 
 /// c handler that utilizes ChannelHandler in order to pass
 /// information to the Handler implementation provided
 extern "C" fn delgating_handler(c_ctx: *const gg_lambda_context) {
+    info!("delegating_handler called!");
     unsafe {
         let result = build_context(c_ctx).and_then(ChannelHolder::send);
-
         if let Err(e) = result {
             error!("{}", e);
         }

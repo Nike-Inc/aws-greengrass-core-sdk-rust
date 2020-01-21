@@ -56,9 +56,11 @@ impl Runtime {
     pub(crate) fn start(self) -> Result<(), GGError> {
         unsafe {
             let c_handler = if let Some(handler) = self.handler {
-                thread::spawn(move || match ChannelHolder::recv() {
-                    Ok(context) => handler.handle(context),
-                    Err(e) => error!("{}", e),
+                thread::spawn(move || loop {
+                    match ChannelHolder::recv() {
+                        Ok(context) => handler.handle(context),
+                        Err(e) => error!("{}", e),
+                    }
                 });
 
                 delgating_handler

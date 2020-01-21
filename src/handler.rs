@@ -1,9 +1,9 @@
 // just a placeholder for now
 #[derive(Debug)]
 pub struct LambdaContext {
-    function_arn: String,
-    client_context: String,
-    message: String,
+    pub function_arn: String,
+    pub client_context: String,
+    pub message: String,
 }
 
 impl LambdaContext {

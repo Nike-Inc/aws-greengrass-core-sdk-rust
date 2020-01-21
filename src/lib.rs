@@ -23,6 +23,7 @@ impl Initializer {
         unsafe {
             let init_res = gg_global_init(0);
             GGError::from_code(init_res)?;
+            self.runtime.start()?;
         }
         Ok(())
     }

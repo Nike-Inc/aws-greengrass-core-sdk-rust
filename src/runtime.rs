@@ -36,6 +36,7 @@ impl RuntimeOption {
 }
 
 /// Configures and instantiates the green grass core runtime
+/// Runtime can only be started by the Initializer. You must pass the runtime into the Initializer::with_runtime method.
 pub struct Runtime {
     runtime_option: RuntimeOption,
     handler: Option<Box<ShareableHandler>>,
@@ -52,7 +53,7 @@ impl Default for Runtime {
 
 impl Runtime {
     /// Start the green grass core runtime
-    pub fn start(self) -> Result<(), GGError> {
+    pub(crate) fn start(self) -> Result<(), GGError> {
         unsafe {
             let c_handler = if let Some(handler) = self.handler {
                 thread::spawn(move || match ChannelHolder::recv() {

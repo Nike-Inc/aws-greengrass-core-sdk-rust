@@ -22,12 +22,3 @@ pub trait Handler {
     fn handle(&self, ctx: LambdaContext); 
 
 }
-
-#[derive(Default)]
-pub struct NoOpHandler;
-
-impl Handler for NoOpHandler {
-    fn handle(&self, _: LambdaContext) {
-
-    }
-}

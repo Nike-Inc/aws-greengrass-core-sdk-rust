@@ -2,25 +2,22 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use crate::error::GGError;
 use std::default::Default;
-use crate::handler::{Handler, LambdaContext, NoOpHandler};
+use crate::handler::{Handler, LambdaContext};
 use std::os::raw::c_void;
 use std::ffi::{CString, CStr};
 use log::error;
 use std::sync::Arc;
-use std::cell::RefCell;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 use lazy_static::lazy_static;
+use std::thread;
 
 const BUFFER_SIZE: usize = 100;
 
 type ShareableHandler = dyn Handler + Send + Sync;
 
-static SENDER: Arc<RefCell<Option<Sender<LambdaContext>>>> = init_sender();
-
-const fn init_sender() -> Arc<RefCell<Option<Sender<LambdaContext>>>> {
-    Arc::new(RefCell::new(None))
+lazy_static! {
+    static ref CHANNEL: Arc<ChannelHolder> = ChannelHolder::new();
 }
-
 
 pub enum RuntimeOption {
     Async,
@@ -36,14 +33,14 @@ impl RuntimeOption {
 
 pub struct Runtime {
     runtime_option: RuntimeOption,
-    handler: Box<ShareableHandler>,
+    handler: Option<Box<ShareableHandler>>,
 }
 
 impl Default for Runtime {
     fn default() -> Self {
         Runtime {
             runtime_option: RuntimeOption::Async,
-            handler: Box::new(NoOpHandler),
+            handler: None,
         }
     }
 }
@@ -51,30 +48,21 @@ impl Default for Runtime {
 impl Runtime {
     pub fn start(self) -> Result<(), GGError> {
         unsafe {
-            // todo - support handlers
-            // this will probably involve creating a handler with a channel that then
-            // sends info to our handler function: https://doc.rust-lang.org/nomicon/ffi.html#asynchronous-callbacks
-
-            // Arc::clone(&HANDLER).replace(self.handler);        
-
-            let (sender, receiver) = unbounded();    
-            Arc::clone(&SENDER).replace(Some(sender));
-
             
-            extern "C" fn c_handler(c_ctx: *const gg_lambda_context) {
-                unsafe {
-                    match build_context(c_ctx) {
-                        Ok(context) => {                        
-                            // Arc::clone(&HANDLER).borrow().handle(context);
-                        }
-                        Err(e) => error!("Handler error: {}", e)
+            let c_handler = if let Some(handler) = self.handler {
+                thread::spawn(move || {
+                    match ChannelHolder::recv() {
+                        Ok(context) =>  handler.handle(context),
+                        Err(e) => error!("{}", e),
                     }
-                }
-            };
+                });
 
+                delgating_handler
+            } else {
+                no_op_handler
+            };
             
-            extern "C" fn no_op_handler(_: *const gg_lambda_context) {};
-            let start_res = gg_runtime_start(Some(no_op_handler), self.runtime_option.as_opt());
+            let start_res = gg_runtime_start(Some(c_handler), self.runtime_option.as_opt());
             GGError::from_code(start_res)?;
         }
         Ok(())
@@ -87,13 +75,26 @@ impl Runtime {
         }
     }
 
-    pub fn with_handler(self, handler: Box<ShareableHandler>) -> Self {
+    pub fn with_handler(self, handler: Option<Box<ShareableHandler>>) -> Self {
         Runtime {
             handler,
             ..self
         }
     }
 
+}
+
+extern "C" fn no_op_handler(_: *const gg_lambda_context) {}
+
+extern "C" fn delgating_handler(c_ctx: *const gg_lambda_context) {
+    unsafe {
+        let result = build_context(c_ctx) 
+            .and_then(ChannelHolder::send);
+
+        if let Err(e) = result {
+            error!("{}", e);
+        }
+    }
 }
 
 pub(crate) unsafe fn build_context(c_ctx: *const gg_lambda_context) -> Result<LambdaContext, GGError> {
@@ -139,3 +140,30 @@ unsafe fn handler_read_message() -> Result<String, GGError> {
         .map_err(GGError::from)
     
 }
+
+struct ChannelHolder {
+    sender: Sender<LambdaContext>,
+    receiver: Receiver<LambdaContext>,
+}
+
+impl ChannelHolder {
+    pub fn new() -> Arc<Self> {
+        let (sender, receiver) = unbounded();
+        let holder = ChannelHolder {
+            sender,
+            receiver,
+        };
+        Arc::new(holder)
+    }
+
+    fn send(context: LambdaContext) -> Result<(), GGError> {
+        Arc::clone(&CHANNEL).sender.send(context)
+            .map_err(GGError::from)
+    }
+    
+    fn recv() -> Result<LambdaContext, GGError> {
+        Arc::clone(&CHANNEL).receiver.recv()
+            .map_err(GGError::from)
+    }
+}
+

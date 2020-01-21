@@ -6,6 +6,8 @@ use std::error::Error;
 use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
+use crossbeam_channel::{SendError, RecvError};
+use crate::handler::LambdaContext;
 
 #[derive(Debug)]
 pub enum GGError {
@@ -17,6 +19,8 @@ pub enum GGError {
     NulError(ffi::NulError),
     InvalidString(ffi::IntoStringError),
     Unknown,
+    HandlerChannelSendError(SendError<LambdaContext>),
+    HandlerChannelRecvError(RecvError),
 }
 
 impl GGError {
@@ -45,6 +49,8 @@ impl fmt::Display for GGError {
             Self::Terminate => write!(f, "Remote signal to terminate received"),
             Self::NulError(ref e) => write!(f, "{}", e),
             Self::InvalidString(ref e) => write!(f, "{}", e),
+            Self::HandlerChannelSendError(ref e) => write!(f, "Error sending to handler channel: {}", e),
+            Self::HandlerChannelRecvError(ref e) => write!(f, "Error receving from handler channel: {}", e),
             _ => write!(f, "Unknown Error Occurred"),
         }
     }
@@ -55,6 +61,8 @@ impl Error for GGError {
         match self {
             Self::NulError(ref e) => Some(e),
             Self::InvalidString(ref e) => Some(e),
+            Self::HandlerChannelSendError(ref e) => Some(e),
+            Self::HandlerChannelRecvError(ref e) => Some(e),
             _ => None
         }
     }
@@ -69,6 +77,18 @@ impl From<ffi::NulError> for GGError {
 impl From<ffi::IntoStringError> for GGError {
     fn from(e: ffi::IntoStringError) -> Self {
         GGError::InvalidString(e)
+    }
+}
+
+impl From<SendError<LambdaContext>> for GGError {
+    fn from(e: SendError<LambdaContext>) -> Self {
+        GGError::HandlerChannelSendError(e)
+    }
+}
+
+impl From<RecvError> for GGError {
+    fn from(e: RecvError) -> Self {
+        GGError::HandlerChannelRecvError(e)
     }
 }
 

@@ -6,7 +6,7 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use lazy_static::lazy_static;
 use log::{error, info};
 use std::default::Default;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use std::thread;
@@ -120,9 +120,8 @@ unsafe fn build_context(c_ctx: *const gg_lambda_context) -> Result<LambdaContext
 }
 
 /// Wraps the C gg_lambda_handler_read call
-unsafe fn handler_read_message() -> Result<String, GGError> {
+unsafe fn handler_read_message() -> Result<Vec<u8>, GGError> {
     let mut collected: Vec<u8> = Vec::new();
-
     loop {
         let mut buffer = [0u8; BUFFER_SIZE];
         let mut read: usize = 0;
@@ -140,9 +139,7 @@ unsafe fn handler_read_message() -> Result<String, GGError> {
             break;
         }
     }
-
-    let c_string = CString::from_vec_unchecked(collected);
-    c_string.into_string().map_err(GGError::from)
+    Ok(collected)
 }
 
 /// Wraps a Channel.

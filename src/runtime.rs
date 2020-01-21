@@ -1,14 +1,14 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use crate::error::GGError;
-use std::default::Default;
 use crate::handler::{Handler, LambdaContext};
-use std::os::raw::c_void;
-use std::ffi::{CString, CStr};
-use log::error;
-use std::sync::Arc;
-use crossbeam_channel::{unbounded, Sender, Receiver};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use lazy_static::lazy_static;
+use log::error;
+use std::default::Default;
+use std::ffi::{CStr, CString};
+use std::os::raw::c_void;
+use std::sync::Arc;
 use std::thread;
 
 const BUFFER_SIZE: usize = 100;
@@ -54,20 +54,17 @@ impl Runtime {
     /// Start the green grass core runtime
     pub fn start(self) -> Result<(), GGError> {
         unsafe {
-            
             let c_handler = if let Some(handler) = self.handler {
-                thread::spawn(move || {
-                    match ChannelHolder::recv() {
-                        Ok(context) =>  handler.handle(context),
-                        Err(e) => error!("{}", e),
-                    }
+                thread::spawn(move || match ChannelHolder::recv() {
+                    Ok(context) => handler.handle(context),
+                    Err(e) => error!("{}", e),
                 });
 
                 delgating_handler
             } else {
                 no_op_handler
             };
-            
+
             let start_res = gg_runtime_start(Some(c_handler), self.runtime_option.as_opt());
             GGError::from_code(start_res)?;
         }
@@ -84,24 +81,18 @@ impl Runtime {
 
     /// Provide a handler. If no handler is provided the runtime will register a no-op handler
     pub fn with_handler(self, handler: Option<Box<ShareableHandler>>) -> Self {
-        Runtime {
-            handler,
-            ..self
-        }
+        Runtime { handler, ..self }
     }
-
 }
 
 /// c handler that performs a no op
 extern "C" fn no_op_handler(_: *const gg_lambda_context) {}
 
-
 /// c handler that utilizes ChannelHandler in order to pass
 /// information to the Handler implementation provided
 extern "C" fn delgating_handler(c_ctx: *const gg_lambda_context) {
     unsafe {
-        let result = build_context(c_ctx) 
-            .and_then(ChannelHolder::send);
+        let result = build_context(c_ctx).and_then(ChannelHolder::send);
 
         if let Err(e) = result {
             error!("{}", e);
@@ -131,28 +122,22 @@ unsafe fn handler_read_message() -> Result<String, GGError> {
         let mut buffer = [0u8; BUFFER_SIZE];
         let mut read: usize = 0;
 
-        let raw_read = &mut read as *mut usize; 
+        let raw_read = &mut read as *mut usize;
 
-        let pub_res = gg_lambda_handler_read(
-            buffer.as_mut_ptr() as *mut c_void,
-            BUFFER_SIZE,
-            raw_read 
-        );
+        let pub_res =
+            gg_lambda_handler_read(buffer.as_mut_ptr() as *mut c_void, BUFFER_SIZE, raw_read);
 
         GGError::from_code(pub_res)?;
 
         if read > 0 {
             collected.extend_from_slice(&buffer[..read]);
-        }
-        else {
+        } else {
             break;
-        }        
+        }
     }
 
     let c_string = CString::from_vec_unchecked(collected);
-    c_string.into_string()
-        .map_err(GGError::from)
-    
+    c_string.into_string().map_err(GGError::from)
 }
 
 /// Wraps a Channel.
@@ -165,23 +150,20 @@ struct ChannelHolder {
 impl ChannelHolder {
     pub fn new() -> Arc<Self> {
         let (sender, receiver) = unbounded();
-        let holder = ChannelHolder {
-            sender,
-            receiver,
-        };
+        let holder = ChannelHolder { sender, receiver };
         Arc::new(holder)
     }
 
     /// Performs a send with CHANNEL and coerces the error type
     fn send(context: LambdaContext) -> Result<(), GGError> {
-        Arc::clone(&CHANNEL).sender.send(context)
+        Arc::clone(&CHANNEL)
+            .sender
+            .send(context)
             .map_err(GGError::from)
     }
-    
+
     /// Performs a recv with CHANNEL and coerces the error type
     fn recv() -> Result<LambdaContext, GGError> {
-        Arc::clone(&CHANNEL).receiver.recv()
-            .map_err(GGError::from)
+        Arc::clone(&CHANNEL).receiver.recv().map_err(GGError::from)
     }
 }
-

@@ -1,13 +1,13 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+use crate::handler::LambdaContext;
+use crossbeam_channel::{RecvError, SendError};
 use std::convert::From;
 use std::convert::Into;
 use std::error::Error;
 use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
-use crossbeam_channel::{SendError, RecvError};
-use crate::handler::LambdaContext;
 
 #[derive(Debug)]
 pub enum GGError {
@@ -49,21 +49,25 @@ impl fmt::Display for GGError {
             Self::Terminate => write!(f, "Remote signal to terminate received"),
             Self::NulError(ref e) => write!(f, "{}", e),
             Self::InvalidString(ref e) => write!(f, "{}", e),
-            Self::HandlerChannelSendError(ref e) => write!(f, "Error sending to handler channel: {}", e),
-            Self::HandlerChannelRecvError(ref e) => write!(f, "Error receving from handler channel: {}", e),
+            Self::HandlerChannelSendError(ref e) => {
+                write!(f, "Error sending to handler channel: {}", e)
+            }
+            Self::HandlerChannelRecvError(ref e) => {
+                write!(f, "Error receving from handler channel: {}", e)
+            }
             _ => write!(f, "Unknown Error Occurred"),
         }
     }
 }
 
 impl Error for GGError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> { 
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::NulError(ref e) => Some(e),
             Self::InvalidString(ref e) => Some(e),
             Self::HandlerChannelSendError(ref e) => Some(e),
             Self::HandlerChannelRecvError(ref e) => Some(e),
-            _ => None
+            _ => None,
         }
     }
 }

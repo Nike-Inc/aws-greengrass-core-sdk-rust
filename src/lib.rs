@@ -3,8 +3,8 @@
 #![allow(non_snake_case)]
 
 pub mod client;
-pub mod handler;
 pub mod error;
+pub mod handler;
 pub mod log;
 pub mod runtime;
 

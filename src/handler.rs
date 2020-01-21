@@ -11,14 +11,11 @@ impl LambdaContext {
         LambdaContext {
             function_arn,
             client_context,
-            message
+            message,
         }
     }
 }
 
-
 pub trait Handler {
-
-    fn handle(&self, ctx: LambdaContext); 
-
+    fn handle(&self, ctx: LambdaContext);
 }

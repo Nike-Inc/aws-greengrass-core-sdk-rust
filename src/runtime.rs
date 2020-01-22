@@ -28,9 +28,11 @@ pub enum RuntimeOption {
 }
 
 impl RuntimeOption {
+
+    /// Converts to the option required by the runtime api
     fn as_opt(&self) -> gg_runtime_opt {
         match self {
-            Self::Async => 1,
+            Self::Async => gg_runtime_opt_GG_RT_OPT_ASYNC,
         }
     }
 }
@@ -55,6 +57,9 @@ impl Runtime {
     /// Start the green grass core runtime
     pub(crate) fn start(self) -> Result<(), GGError> {
         unsafe {
+            // If there is a handler defined, then register the
+            // the c delegating handler and start a thread that 
+            // monitors the channel for messages from the c handler
             let c_handler = if let Some(handler) = self.handler {
                 thread::spawn(move || loop {
                     match ChannelHolder::recv() {

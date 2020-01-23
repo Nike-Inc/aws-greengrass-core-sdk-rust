@@ -15,12 +15,14 @@ use crate::error::GGError;
 use crate::runtime::Runtime;
 use std::default::Default;
 
+pub type GGResult<T> = Result<T, GGError>;
+
 pub struct Initializer {
     runtime: Runtime,
 }
 
 impl Initializer {
-    pub fn init(self) -> Result<(), GGError> {
+    pub fn init(self) -> GGResult<()> {
         unsafe {
             let init_res = gg_global_init(0);
             GGError::from_code(init_res)?;
@@ -42,6 +44,6 @@ impl Default for Initializer {
     }
 }
 
-pub fn init() -> Result<(), GGError> {
+pub fn init() -> GGResult<()> {
     Initializer::default().init()
 }

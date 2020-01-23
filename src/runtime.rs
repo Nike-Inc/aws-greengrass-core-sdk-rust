@@ -1,5 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+use crate::GGResult;
 use crate::error::GGError;
 use crate::handler::{Handler, LambdaContext};
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -54,7 +55,7 @@ impl Default for Runtime {
 
 impl Runtime {
     /// Start the green grass core runtime
-    pub(crate) fn start(self) -> Result<(), GGError> {
+    pub(crate) fn start(self) -> GGResult<()> {
         unsafe {
             // If there is a handler defined, then register the
             // the c delegating handler and start a thread that
@@ -110,7 +111,7 @@ extern "C" fn delgating_handler(c_ctx: *const gg_lambda_context) {
 }
 
 /// Converts the c context to our rust native context
-unsafe fn build_context(c_ctx: *const gg_lambda_context) -> Result<LambdaContext, GGError> {
+unsafe fn build_context(c_ctx: *const gg_lambda_context) -> GGResult<LambdaContext> {
     let message = handler_read_message()?;
     let function_arn = CStr::from_ptr((*c_ctx).function_arn)
         .to_string_lossy()
@@ -124,7 +125,7 @@ unsafe fn build_context(c_ctx: *const gg_lambda_context) -> Result<LambdaContext
 }
 
 /// Wraps the C gg_lambda_handler_read call
-unsafe fn handler_read_message() -> Result<Vec<u8>, GGError> {
+unsafe fn handler_read_message() -> GGResult<Vec<u8>> {
     let mut collected: Vec<u8> = Vec::new();
     loop {
         let mut buffer = [0u8; BUFFER_SIZE];
@@ -161,7 +162,7 @@ impl ChannelHolder {
     }
 
     /// Performs a send with CHANNEL and coerces the error type
-    fn send(context: LambdaContext) -> Result<(), GGError> {
+    fn send(context: LambdaContext) -> GGResult<()> {
         Arc::clone(&CHANNEL)
             .sender
             .send(context)
@@ -169,7 +170,7 @@ impl ChannelHolder {
     }
 
     /// Performs a recv with CHANNEL and coerces the error type
-    fn recv() -> Result<LambdaContext, GGError> {
+    fn recv() -> GGResult<LambdaContext> {
         Arc::clone(&CHANNEL).receiver.recv().map_err(GGError::from)
     }
 }

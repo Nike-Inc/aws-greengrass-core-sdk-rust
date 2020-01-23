@@ -5,13 +5,14 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
 
+use crate::GGResult;
 use crate::error::GGError;
 
 pub struct IOTDataClient;
 
 impl IOTDataClient {
     /// Raw publish method that wraps gg_request_init, gg_publish
-    pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> Result<(), GGError> {
+    pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
         info!("topic: {}, read: {:?}, buffer: {:?}", topic, read, buffer);
 
         unsafe {
@@ -40,7 +41,7 @@ impl IOTDataClient {
     }
 
     /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
-    pub fn publish<T: AsRef<[u8]>>(topic: &str, message: T) -> Result<(), GGError> {
+    pub fn publish<T: AsRef<[u8]>>(topic: &str, message: T) -> GGResult<()> {
         let as_bytes = message.as_ref();
         let size = as_bytes.len();
         Self::publish_raw(topic, as_bytes, size)

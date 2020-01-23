@@ -1,10 +1,11 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+use crate::GGResult;
 use crate::error::GGError;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use std::convert::{Into, From, TryFrom, TryInto};
+use std::convert::{Into, From, TryInto, AsRef};
 
 const BUFFER_SIZE: usize = 512;
 
@@ -15,7 +16,7 @@ pub enum Secret {
 
 impl Secret {
 
-    pub fn for_key(key: &str) -> Result<Secret, GGError> {
+    pub fn for_key(key: &str) -> GGResult<Secret> {
         match read_secret(key) {
             Ok(v) => Ok(Secret::Value(v)),
             Err(GGError::InvalidParameter) => Ok(Secret::Empty),            
@@ -44,6 +45,16 @@ impl TryInto<Option<String>> for Secret {
                     .map_err(GGError::from)
             }
             _ => Ok(None)
+        }
+    }
+}
+
+impl AsRef<[u8]> for Secret {
+
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Empty => &[0u8],
+            Self::Value(v) => v.as_slice(),
         }
     }
 }
@@ -77,7 +88,7 @@ fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
 }
 
 /// Fetch the specified secrete from the green grass secret store
-fn read_secret(secret_name: &str) -> Result<Vec<u8>, GGError> {
+fn read_secret(secret_name: &str) -> GGResult<Vec<u8>> {
     unsafe {
         let mut req: gg_request = ptr::null_mut();
         let req_init = gg_request_init(&mut req);

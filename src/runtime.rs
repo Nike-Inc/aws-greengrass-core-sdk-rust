@@ -28,7 +28,6 @@ pub enum RuntimeOption {
 }
 
 impl RuntimeOption {
-
     /// Converts to the option required by the runtime api
     fn as_opt(&self) -> gg_runtime_opt {
         match self {
@@ -58,7 +57,7 @@ impl Runtime {
     pub(crate) fn start(self) -> Result<(), GGError> {
         unsafe {
             // If there is a handler defined, then register the
-            // the c delegating handler and start a thread that 
+            // the c delegating handler and start a thread that
             // monitors the channel for messages from the c handler
             let c_handler = if let Some(handler) = self.handler {
                 thread::spawn(move || loop {

@@ -10,7 +10,6 @@ use crate::error::GGError;
 pub struct IOTDataClient;
 
 impl IOTDataClient {
-
     /// Raw publish method that wraps gg_request_init, gg_publish
     pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> Result<(), GGError> {
         info!("topic: {}, read: {:?}, buffer: {:?}", topic, read, buffer);

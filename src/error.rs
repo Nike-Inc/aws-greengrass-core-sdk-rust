@@ -77,7 +77,6 @@ impl From<ffi::NulError> for GGError {
     }
 }
 
-
 impl From<SendError<LambdaContext>> for GGError {
     fn from(e: SendError<LambdaContext>) -> Self {
         GGError::HandlerChannelSendError(e)

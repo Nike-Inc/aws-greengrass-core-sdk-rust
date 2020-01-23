@@ -8,6 +8,7 @@ use std::error::Error;
 use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
+use std::string::FromUtf8Error;
 
 #[derive(Debug)]
 pub enum GGError {
@@ -17,7 +18,7 @@ pub enum GGError {
     InternalFailure,
     Terminate,
     NulError(ffi::NulError),
-    InvalidString(ffi::IntoStringError),
+    InvalidString(String),
     Unknown,
     HandlerChannelSendError(SendError<LambdaContext>),
     HandlerChannelRecvError(RecvError),
@@ -63,7 +64,6 @@ impl Error for GGError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::NulError(ref e) => Some(e),
-            Self::InvalidString(ref e) => Some(e),
             Self::HandlerChannelSendError(ref e) => Some(e),
             Self::HandlerChannelRecvError(ref e) => Some(e),
             _ => None,
@@ -92,5 +92,11 @@ impl From<RecvError> for GGError {
 impl Into<IOError> for GGError {
     fn into(self) -> IOError {
         IOError::new(IOErrorKind::Other, self)
+    }
+}
+
+impl From<FromUtf8Error> for GGError {
+    fn from(e: FromUtf8Error) -> Self {
+        Self::InvalidString(format!("{}", e))
     }
 }

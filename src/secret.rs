@@ -4,8 +4,49 @@ use crate::error::GGError;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
+use std::convert::{Into, From, TryFrom, TryInto};
 
 const BUFFER_SIZE: usize = 512;
+
+pub enum Secret {
+    Empty,
+    Value(Vec<u8>),
+}
+
+impl Secret {
+
+    pub fn for_key(key: &str) -> Result<Secret, GGError> {
+        match read_secret(key) {
+            Ok(v) => Ok(Secret::Value(v)),
+            Err(GGError::InvalidParameter) => Ok(Secret::Empty),            
+            Err(e) => Err(e),
+        }
+    }
+
+}
+
+impl Into<Option<Vec<u8>>> for Secret {
+    fn into(self) -> Option<Vec<u8>> {
+        match self {
+            Self::Value(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl TryInto<Option<String>> for Secret {
+    type Error = GGError;
+    fn try_into(self) -> Result<Option<String>, Self::Error> {
+        match self {
+            Self::Value(v) => {
+                String::from_utf8(v)
+                    .map(Option::from)
+                    .map_err(GGError::from)
+            }
+            _ => Ok(None)
+        }
+    }
+}
 
 fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
     let mut secret_bytes: Vec<u8> = Vec::new();
@@ -36,7 +77,7 @@ fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
 }
 
 /// Fetch the specified secrete from the green grass secret store
-pub fn read_secret(secret_name: &str) -> Result<Vec<u8>, GGError> {
+fn read_secret(secret_name: &str) -> Result<Vec<u8>, GGError> {
     unsafe {
         let mut req: gg_request = ptr::null_mut();
         let req_init = gg_request_init(&mut req);
@@ -56,12 +97,12 @@ pub fn read_secret(secret_name: &str) -> Result<Vec<u8>, GGError> {
         );
         GGError::from_code(fetch_res)?;
 
-        let read_res = read_response_data(req)?;
+        let read_res = read_response_data(req);
 
         let close_res = gg_request_close(req);
         GGError::from_code(close_res)?;
 
-        Ok(read_res)
+        read_res
     }
 }
 

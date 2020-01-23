@@ -38,6 +38,10 @@ impl GGError {
             _ => Err(Self::Unknown),
         }
     }
+
+    pub fn as_ioerror(self) -> IOError {
+        IOError::new(IOErrorKind::Other, self)
+    }
 }
 
 impl fmt::Display for GGError {
@@ -91,7 +95,7 @@ impl From<RecvError> for GGError {
 
 impl Into<IOError> for GGError {
     fn into(self) -> IOError {
-        IOError::new(IOErrorKind::Other, self)
+        self.as_ioerror()
     }
 }
 

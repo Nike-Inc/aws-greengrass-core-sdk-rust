@@ -9,6 +9,7 @@ use std::convert::{Into, From, TryInto, AsRef};
 
 const BUFFER_SIZE: usize = 512;
 
+#[derive(Debug, Clone)]
 pub enum Secret {
     Empty,
     Value(Vec<u8>),

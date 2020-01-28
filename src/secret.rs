@@ -6,6 +6,7 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
 use std::convert::{Into, From, TryInto, AsRef};
+use std::default::Default;
 
 const BUFFER_SIZE: usize = 512;
 
@@ -17,6 +18,7 @@ pub enum Secret {
 
 impl Secret {
 
+    /// Instantiate a secret with the value from the AWS secrets store
     pub fn for_key(key: &str) -> GGResult<Secret> {
         match read_secret(key) {
             Ok(v) => Ok(Secret::Value(v)),
@@ -25,6 +27,18 @@ impl Secret {
         }
     }
 
+    /// Instantiate a secret with the specified value
+    /// This is prodominantly use for testing purposes
+    pub fn with_value(self, v: Vec<u8>) -> Self {
+        Secret::Value(v)
+    }
+
+}
+
+impl Default for Secret {
+    fn default() -> Self {
+        Self::Empty
+    }
 }
 
 impl Into<Option<Vec<u8>>> for Secret {

@@ -9,6 +9,7 @@ use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
+use serde_json::Error as SerdeError;
 
 #[derive(Debug)]
 pub enum GGError {
@@ -19,9 +20,11 @@ pub enum GGError {
     Terminate,
     NulError(ffi::NulError),
     InvalidString(String),
-    Unknown,
+    Unknown(String),
     HandlerChannelSendError(SendError<LambdaContext>),
     HandlerChannelRecvError(RecvError),
+    Unauthorized(String),
+    JsonError(SerdeError),
 }
 
 impl GGError {
@@ -35,7 +38,7 @@ impl GGError {
             gg_error_GGE_INVALID_STATE => Err(Self::InvalidState),
             gg_error_GGE_INTERNAL_FAILURE => Err(Self::InternalFailure),
             gg_error_GGE_TERMINATE => Err(Self::Terminate),
-            _ => Err(Self::Unknown),
+            _ => Err(Self::Unknown(format!("Unknown error code: {}", err_code))),
         }
     }
 
@@ -59,7 +62,10 @@ impl fmt::Display for GGError {
             Self::HandlerChannelRecvError(ref e) => {
                 write!(f, "Error receving from handler channel: {}", e)
             }
-            _ => write!(f, "Unknown Error Occurred"),
+            Self::JsonError(ref e) => write!(f, "Error parsing response: {}", e),
+            Self::Unknown(ref s) => write!(f, "{}", s),
+            Self::InvalidString(ref e) => write!(f, "Invalid String: {}", e),
+            Self::Unauthorized(ref s) => write!(f, "{}", s),
         }
     }
 }
@@ -70,6 +76,7 @@ impl Error for GGError {
             Self::NulError(ref e) => Some(e),
             Self::HandlerChannelSendError(ref e) => Some(e),
             Self::HandlerChannelRecvError(ref e) => Some(e),
+            Self::JsonError(ref e) => Some(e),
             _ => None,
         }
     }
@@ -102,5 +109,11 @@ impl Into<IOError> for GGError {
 impl From<FromUtf8Error> for GGError {
     fn from(e: FromUtf8Error) -> Self {
         Self::InvalidString(format!("{}", e))
+    }
+}
+
+impl From<SerdeError> for GGError {
+    fn from(e: SerdeError) -> Self {
+        Self::JsonError(e)
     }
 }

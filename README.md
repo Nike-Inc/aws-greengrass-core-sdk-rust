@@ -1,5 +1,5 @@
 # aws-greengrass-core-sdk-rust
-Provides an idiomatic Rust API around the [AWS Greengrass Core C SDK](https://github.com/aws/aws-greengrass-core-sdk-c)
+Provides an idiomatic Rust API around the [AWS Greengrass Core C SDK](https://github.com/aws/aws-greengrass-core-sdk-c) to mroe easily enable Greengrass native lambda functions in Rust.
 
 ## Currently Supported
 * Publishing to MQTT topics

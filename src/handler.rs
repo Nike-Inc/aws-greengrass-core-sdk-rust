@@ -1,8 +1,11 @@
-// just a placeholder for now
+/// Provided the handler upon receiving an event on an MQTT topic
 #[derive(Debug)]
 pub struct LambdaContext {
+    /// The full lambda ARN
     pub function_arn: String,
+    /// Client context information
     pub client_context: String,
+    /// The message received in bytes
     pub message: Vec<u8>,
 }
 
@@ -16,6 +19,10 @@ impl LambdaContext {
     }
 }
 
+/// Trait to implement for specifying a handler to the greengrass runtime.
+/// This provides the ability to listen to messages sent on MQTT topics.alloc
+///
+/// See [`aws_greengrass_core_rust::runtime::Runtime`] on registering handlers.
 pub trait Handler {
     fn handle(&self, ctx: LambdaContext);
 }

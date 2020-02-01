@@ -5,8 +5,8 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
 
-use crate::GGResult;
 use crate::error::GGError;
+use crate::GGResult;
 
 pub struct IOTDataClient;
 

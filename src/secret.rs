@@ -1,13 +1,13 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use crate::GGResult;
 use crate::error::GGError;
-use std::ffi::CString;
-use std::os::raw::{c_void, c_char};
-use std::ptr;
-use std::convert::{From, AsRef};
-use std::default::Default;
+use crate::GGResult;
 use serde::Deserialize;
+use std::convert::{AsRef, From};
+use std::default::Default;
+use std::ffi::CString;
+use std::os::raw::{c_char, c_void};
+use std::ptr;
 
 const BUFFER_SIZE: usize = 512;
 
@@ -23,21 +23,19 @@ pub struct Secret {
     pub secret_binary: Option<Vec<u8>>,
     pub secret_string: Option<String>,
     pub version_stages: Vec<String>,
-    pub created_date: i64
+    pub created_date: i64,
 }
 
 impl Secret {
-
     /// Creates a new SecretRequestBuilder using the specified secret_id
-    /// 
-    /// @param [&str] The full arn or simple name of the secret
-    /// @return [SecretRequestBuilder] A builder for the secret request
+    ///
+    /// * `secret_id` - The full arn or simple name of the secret
     pub fn for_secret_id(secret_id: &str) -> SecretRequestBuilder {
         SecretRequestBuilder::new(secret_id.to_owned())
     }
 
     /// For testing purposes.
-    /// Can be called with default() to provide a string value 
+    /// Can be called with default() to provide a string value
     pub fn with_secret_string(self, secret_string: Option<String>) -> Self {
         Secret {
             secret_string,
@@ -46,6 +44,7 @@ impl Secret {
     }
 }
 
+/// Used to construct a request to send to acquire a secret from Greengrass
 pub struct SecretRequestBuilder {
     pub secret_id: String,
     pub secret_version: Option<String>,
@@ -53,6 +52,7 @@ pub struct SecretRequestBuilder {
 }
 
 impl SecretRequestBuilder {
+    /// The full id or simple name of the secret
     fn new(secret_id: String) -> Self {
         SecretRequestBuilder {
             secret_id,
@@ -61,6 +61,7 @@ impl SecretRequestBuilder {
         }
     }
 
+    /// Optional Secret version
     pub fn with_secret_version(self, secret_version: Option<String>) -> Self {
         SecretRequestBuilder {
             secret_version,
@@ -68,6 +69,7 @@ impl SecretRequestBuilder {
         }
     }
 
+    /// Optional secret stage
     pub fn with_secret_version_stage(self, secret_version_stage: Option<String>) -> Self {
         SecretRequestBuilder {
             secret_version_stage,
@@ -75,6 +77,7 @@ impl SecretRequestBuilder {
         }
     }
 
+    /// Executes the request and returns the secret
     pub fn request(&self) -> GGResult<Option<Secret>> {
         let response = read_secret(self)?;
         self.parse_response(&response)
@@ -86,13 +89,17 @@ impl SecretRequestBuilder {
             Err(e) => {
                 // If parsing failed, see if we can parse it as an error response
                 match serde_json::from_slice::<ErrorResponse>(response) {
-                    Ok(er) => {
-                        match er.status {
-                            404 => Ok(None),
-                            401 => Err(GGError::Unauthorized(format!("Not Authorized to access secret key: {}", self.secret_id))),
-                            _ => Err(GGError::Unknown(format!("status: {} - message: {}", er.status, er.message)))
-                        }
-                    }
+                    Ok(er) => match er.status {
+                        404 => Ok(None),
+                        401 => Err(GGError::Unauthorized(format!(
+                            "Not Authorized to access secret key: {}",
+                            self.secret_id
+                        ))),
+                        _ => Err(GGError::Unknown(format!(
+                            "status: {} - message: {}",
+                            er.status, er.message
+                        ))),
+                    },
                     Err(_) => {
                         // Json parsing failed for another response, return wrapped version of the original error
                         Err(GGError::from(e))
@@ -103,7 +110,7 @@ impl SecretRequestBuilder {
     }
 }
 
-
+/// Used for parsing Error responses from the secret call
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ErrorResponse {
@@ -111,7 +118,7 @@ struct ErrorResponse {
     message: String,
 }
 
-
+/// Reads the response data from the secret call
 fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
     let mut secret_bytes: Vec<u8> = Vec::new();
 
@@ -162,17 +169,20 @@ fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Vec<u8>> {
 
         let mut res = gg_request_result {
             request_status: gg_request_status_GG_REQUEST_SUCCESS,
-        };        
+        };
 
         let fetch_res = gg_get_secret_value(
-                req,
-                secret_name_c.as_ptr(),
-                maybe_secret_version_c.map(|c| c.as_ptr()).unwrap_or(ptr::null() as *const c_char),
-                maybe_secret_stage_c.map(|c| c.as_ptr()).unwrap_or(ptr::null() as *const c_char),
-                &mut res,
-            );
-        
-        
+            req,
+            secret_name_c.as_ptr(),
+            maybe_secret_version_c
+                .map(|c| c.as_ptr())
+                .unwrap_or(ptr::null() as *const c_char),
+            maybe_secret_stage_c
+                .map(|c| c.as_ptr())
+                .unwrap_or(ptr::null() as *const c_char),
+            &mut res,
+        );
+
         GGError::from_code(fetch_res)?;
 
         let read_res = read_response_data(req);
@@ -184,7 +194,7 @@ fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Vec<u8>> {
     }
 }
 
-#[cfg(test)] 
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -215,5 +225,4 @@ mod tests {
         assert_eq!(CREATION_DATE, secret.created_date);
         assert_eq!(version_stages(), secret.version_stages);
     }
-
 }

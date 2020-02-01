@@ -9,8 +9,9 @@ lazy_static! {
     static ref LOGGER: GGLogger = GGLogger;
 }
 
+/// A logger implementation that wraps the greengrass logging backend
 #[derive(Default)]
-pub struct GGLogger;
+struct GGLogger;
 
 impl Log for GGLogger {
     fn enabled(&self, _: &Metadata) -> bool {
@@ -26,11 +27,21 @@ impl Log for GGLogger {
     fn flush(&self) {}
 }
 
+/// Initializes the Greengrass Logger with the specified run level
+///
+/// # Examples
+/// ```example2018
+/// use log::LogLevel;
+/// use aws_greengrass_core_rust::log as gglog;
+///
+/// gglog::init_log(Level::Debug);
+/// ```
 pub fn init_log(max_level: LevelFilter) {
     log::set_max_level(max_level);
     log::set_logger(&*LOGGER).expect("GGLogger implementation could not be set as logger");
 }
 
+/// Converts a [`log::Record`] to a c log entry and sends it to gg_log
 fn to_gg_log(record: &Record) {
     let formatted = format!("{} -- {}", record.target(), record.args());
     let bytes = formatted.into_bytes();
@@ -42,6 +53,7 @@ fn to_gg_log(record: &Record) {
     }
 }
 
+/// Coerces a [`log::Level`] into a green grass log level
 fn to_gg_log_level(l: &Level) -> gg_log_level {
     match l {
         Level::Info => gg_log_level_GG_LOG_INFO,

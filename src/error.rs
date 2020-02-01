@@ -2,6 +2,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use crate::handler::LambdaContext;
 use crossbeam_channel::{RecvError, SendError};
+use serde_json::Error as SerdeError;
 use std::convert::From;
 use std::convert::Into;
 use std::error::Error;
@@ -9,21 +10,34 @@ use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
-use serde_json::Error as SerdeError;
 
+/// Provices a wrapper for the various errors that are incurred both working with the
+/// GreenGrass C SDK directly or from the content of the results from it's responses (e.g. http status codes in json response objects)
 #[derive(Debug)]
 pub enum GGError {
+    /// Maps to the C API GGE_OUT_OF_MEMORY response
     OutOfMemory,
+    /// Maps to the C API GGE_INVALID_PARAMETER response
     InvalidParameter,
+    /// Maps to the C API GGE_INVALID_STATE response
     InvalidState,
+    /// Maps to the C API GGE_INTERNAL_FAILURE response
     InternalFailure,
+    /// Maps to the C API GGE_TERMINATE response
     Terminate,
+    /// If null pointer from the C API that cannot be recovered from is encountered
     NulError(ffi::NulError),
+    /// C String cannot be coerced into a Rust String
     InvalidString(String),
+    /// If receive an error type from the C API that isn't known
     Unknown(String),
+    /// If there are issues in communicating to the Handler  
     HandlerChannelSendError(SendError<LambdaContext>),
+    /// If there are issues in communicating to the Handler  
     HandlerChannelRecvError(RecvError),
+    /// If an AWS response contains an unauthorized error code
     Unauthorized(String),
+    /// Thrown if there is an error with the JSON content we received from AWS
     JsonError(SerdeError),
 }
 

@@ -1,8 +1,8 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use crate::GGResult;
 use crate::error::GGError;
 use crate::handler::{Handler, LambdaContext};
+use crate::GGResult;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use lazy_static::lazy_static;
 use log::{error, info};
@@ -38,7 +38,7 @@ impl RuntimeOption {
 }
 
 /// Configures and instantiates the green grass core runtime
-/// Runtime can only be started by the Initializer. You must pass the runtime into the Initializer::with_runtime method.
+/// Runtime can only be started by the Initializer. You must pass the runtime into the [`Initializer::with_runtime`] method.
 pub struct Runtime {
     runtime_option: RuntimeOption,
     handler: Option<Box<ShareableHandler>>,
@@ -88,6 +88,21 @@ impl Runtime {
     }
 
     /// Provide a handler. If no handler is provided the runtime will register a no-op handler
+    ///
+    /// ```rust
+    /// use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+    /// use aws_greengrass_core_rust::runtime::Runtime;
+    ///
+    /// struct MyHandler;
+    ///
+    /// impl Handler for MyHandler {
+    ///     fn handle(&self, ctx: LambdaContext) {
+    ///         // Do something here  
+    ///     }
+    /// }
+    ///
+    /// Runtime::default().with_handler(Some(Box::new(MyHandler)));
+    /// ```
     pub fn with_handler(self, handler: Option<Box<ShareableHandler>>) -> Self {
         Runtime { handler, ..self }
     }

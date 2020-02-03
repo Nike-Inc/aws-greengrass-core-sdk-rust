@@ -13,8 +13,6 @@ pub struct IOTDataClient;
 impl IOTDataClient {
     /// Raw publish method that wraps gg_request_init, gg_publish
     pub fn publish_raw(topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
-        info!("topic: {}, read: {:?}, buffer: {:?}", topic, read, buffer);
-
         unsafe {
             let mut req: gg_request = ptr::null_mut();
             let req_init = gg_request_init(&mut req);

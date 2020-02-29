@@ -10,7 +10,8 @@
 //! pub fn main() -> std::io::Result<()> {
 //!     gglog::init_log(LevelFilter::Info);
 //!     init().map_err(|e| e.as_ioerror());
-//!     IOTDataClient::publish("mytopic", r#"{"msg": "foo"}"#).map_err(|e| e.as_ioerror())
+//!     let _result = IOTDataClient::default().publish("mytopic", r#"{"msg": "foo"}"#).map_err(|e| e.as_ioerror());
+//!     Ok(())
 //! }
 //! ```
 #![allow(non_upper_case_globals)]
@@ -56,7 +57,7 @@ impl Initializer {
     /// use aws_greengrass_core_rust::runtime::Runtime;
     /// use aws_greengrass_core_rust::Initializer;
     ///
-    /// Initializer::default()::with_runtime(Runtime::default());
+    /// Initializer::default().with_runtime(Runtime::default());
     /// ```
     pub fn with_runtime(self, runtime: Runtime) -> Self {
         Initializer { runtime, ..self }

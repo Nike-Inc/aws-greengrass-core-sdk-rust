@@ -6,5 +6,8 @@ use log::LevelFilter;
 pub fn main() -> std::io::Result<()> {
     gglog::init_log(LevelFilter::Info);
     init().map_err(|e| e.as_ioerror())?;
-    IOTDataClient::publish("mytopic", r#"{"msg": "hello greengrass!"}"#).map_err(|e| e.as_ioerror())
+    let result = IOTDataClient::default().publish("mytopic", r#"{"msg": "hello greengrass!"}"#)
+        .map_err(|e| e.as_ioerror());
+    println!("result {:?}", result);
+    Ok(())
 }

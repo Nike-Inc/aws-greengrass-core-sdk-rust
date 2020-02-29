@@ -15,7 +15,7 @@ impl Handler for EchoHandler {
         info!("Handler received: {:?}", ctx);
         let message = String::from_utf8_lossy(ctx.message.as_slice());
         info!("Message: {}", message);
-        if let Err(e) = IOTDataClient::publish(SEND_TOPIC, ctx.message.clone()) {
+        if let Err(e) = IOTDataClient::default().publish(SEND_TOPIC, ctx.message.clone()) {
             error!("Error sending {} to topic {} -- {}", message, SEND_TOPIC, e);
         }
     }

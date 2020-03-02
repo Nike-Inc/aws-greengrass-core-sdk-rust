@@ -1,10 +1,10 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+use std::convert::TryFrom;
+use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use std::convert::TryFrom;
-use std::default::Default;
 
 use crate::error::GGError;
 use crate::GGResult;
@@ -23,7 +23,7 @@ pub enum GGRequestStatus {
     /// System encounters unknown error. Check logs for more details
     Unknown,
     /// function call is throttled, try again
-    Again
+    Again,
 }
 
 impl TryFrom<&gg_request_status> for GGRequestStatus {
@@ -36,21 +36,23 @@ impl TryFrom<&gg_request_status> for GGRequestStatus {
             &gg_request_status_GG_REQUEST_UNHANDLED => Ok(Self::Unhandled),
             &gg_request_status_GG_REQUEST_UNKNOWN => Ok(Self::Unknown),
             &gg_request_status_GG_REQUEST_AGAIN => Ok(Self::Again),
-            _ => Err(Self::Error::Unknown(format!("Unknown error code: {}", value))),
+            _ => Err(Self::Error::Unknown(format!(
+                "Unknown error code: {}",
+                value
+            ))),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct GGRequestResponse {
-    pub request_status: GGRequestStatus
+    pub request_status: GGRequestStatus,
 }
-
 
 impl Default for GGRequestResponse {
     fn default() -> Self {
         GGRequestResponse {
-            request_status: GGRequestStatus::Success
+            request_status: GGRequestStatus::Success,
         }
     }
 }
@@ -61,17 +63,16 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
     fn try_from(value: &gg_request_result) -> Result<Self, Self::Error> {
         let status = GGRequestStatus::try_from(&value.request_status)?;
         Ok(GGRequestResponse {
-            request_status: status
+            request_status: status,
         })
     }
 }
 
 pub struct IOTDataClient {
-    pub inner: Box<dyn IOTDataClientInner>
+    pub inner: Box<dyn IOTDataClientInner>,
 }
 
 impl IOTDataClient {
-
     /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
     pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<GGRequestResponse> {
         let as_bytes = message.as_ref();
@@ -80,16 +81,14 @@ impl IOTDataClient {
     }
 
     pub fn with_inner(self, inner: Box<dyn IOTDataClientInner>) -> Self {
-        IOTDataClient {
-            inner
-        }
+        IOTDataClient { inner }
     }
 }
 
 impl Default for IOTDataClient {
     fn default() -> Self {
         IOTDataClient {
-            inner: Box::new(DefaultIODataClientInner)
+            inner: Box::new(DefaultIODataClientInner),
         }
     }
 }
@@ -131,44 +130,50 @@ impl IOTDataClientInner for DefaultIODataClientInner {
     }
 }
 
-
 #[cfg(test)]
-pub mod tests {
+pub mod test {
     use super::*;
-    use std::cell::RefCell;
+    use crate::test::CallHolder;
     use std::rc::Rc;
 
+    /// Represents that parameters that were pushed to the IOTDataClientInner#publish_raw call
     pub struct PublishRaw(String, Vec<u8>, usize);
 
+    /// Mock implementation of IOTDataClientInner
     pub struct MockInner {
-        pub publish_raw_call: Rc<RefCell<Vec<PublishRaw>>>,
+        pub publish_raw_call: Rc<CallHolder<PublishRaw>>,
     }
 
     impl IOTDataClientInner for MockInner {
-        fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
-            self.publish_raw_call.borrow_mut().push(PublishRaw(topic.to_owned(), buffer.to_owned(), read));
+        fn publish_raw(
+            &self,
+            topic: &str,
+            buffer: &[u8],
+            read: usize,
+        ) -> GGResult<GGRequestResponse> {
+            self.publish_raw_call
+                .push(PublishRaw(topic.to_owned(), buffer.to_owned(), read));
             Ok(GGRequestResponse::default())
         }
     }
-
 
     #[test]
     fn test_publish_str() {
         let topic = "foo";
         let message = "this is my message";
 
-        let mut call_results = Rc::new(RefCell::new(Vec::<PublishRaw>::new()));
+        // let mut call_results = Rc::new(RefCell::new(Vec::<PublishRaw>::new()));
+        let mut call_holder = Rc::new(CallHolder::<PublishRaw>::new());
 
         let inner = MockInner {
-            publish_raw_call: Rc::clone(&call_results)
+            publish_raw_call: Rc::clone(&call_holder),
         };
 
-        let client = IOTDataClient::default()
-            .with_inner(Box::new(inner));
+        let client = IOTDataClient::default().with_inner(Box::new(inner));
 
         let response = client.publish(topic, message).unwrap();
 
-        let PublishRaw(raw_topic, raw_bytes, raw_read) = call_results.borrow_mut().pop().unwrap();
+        let PublishRaw(raw_topic, raw_bytes, raw_read) = &call_holder.calls()[0];
         assert_eq!(raw_topic, topic);
     }
 }

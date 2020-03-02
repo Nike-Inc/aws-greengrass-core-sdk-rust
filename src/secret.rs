@@ -13,10 +13,10 @@ const BUFFER_SIZE: usize = 512;
 
 /// Handles requests to the SecretManager secrets
 /// that have been exposed to the green grass lambda
-/// 
+///
 /// ```rust
 /// use aws_greengrass_core_rust::secret::Secret;
-/// 
+///
 /// let secret_result = Secret::for_secret_id("mysecret")
 ///     .with_secret_version(Some("version here".to_owned()))
 ///     .request();

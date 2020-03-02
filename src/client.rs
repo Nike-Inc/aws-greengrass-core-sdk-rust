@@ -162,7 +162,6 @@ pub mod test {
         let topic = "foo";
         let message = "this is my message";
 
-        // let mut call_results = Rc::new(RefCell::new(Vec::<PublishRaw>::new()));
         let mut call_holder = Rc::new(CallHolder::<PublishRaw>::new());
 
         let inner = MockInner {

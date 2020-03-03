@@ -5,11 +5,10 @@ use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::error::GGError;
 use crate::GGResult;
-use log::Level::Debug;
 
 /// Greengrass SDK request status enum
 /// Maps to gg_request_status
@@ -71,7 +70,7 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
 
 #[derive(Clone)]
 pub struct IOTDataClient {
-    pub inner: Rc<dyn IOTDataClientInner>,
+    pub inner: Arc<dyn IOTDataClientInner>,
 }
 
 impl IOTDataClient {
@@ -82,7 +81,7 @@ impl IOTDataClient {
         self.inner.publish_raw(topic, as_bytes, size)
     }
 
-    pub fn with_inner(self, inner: Rc<dyn IOTDataClientInner>) -> Self {
+    pub fn with_inner(self, inner: Arc<dyn IOTDataClientInner>) -> Self {
         IOTDataClient { inner }
     }
 }
@@ -90,7 +89,7 @@ impl IOTDataClient {
 impl Default for IOTDataClient {
     fn default() -> Self {
         IOTDataClient {
-            inner: Rc::new(DefaultIODataClientInner),
+            inner: Arc::new(DefaultIODataClientInner),
         }
     }
 }
@@ -170,7 +169,7 @@ pub mod test {
             publish_raw_call: Rc::clone(&call_holder),
         };
 
-        let client = IOTDataClient::default().with_inner(Rc::new(inner));
+        let client = IOTDataClient::default().with_inner(Arc::new(inner));
 
         let response = client.publish(topic, message).unwrap();
 

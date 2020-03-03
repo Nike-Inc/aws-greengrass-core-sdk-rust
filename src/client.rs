@@ -5,6 +5,7 @@ use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
+use std::rc::Rc;
 
 use crate::error::GGError;
 use crate::GGResult;
@@ -68,8 +69,9 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
     }
 }
 
+#[derive(Clone)]
 pub struct IOTDataClient {
-    pub inner: Box<dyn IOTDataClientInner>,
+    pub inner: Rc<dyn IOTDataClientInner>,
 }
 
 impl IOTDataClient {
@@ -80,7 +82,7 @@ impl IOTDataClient {
         self.inner.publish_raw(topic, as_bytes, size)
     }
 
-    pub fn with_inner(self, inner: Box<dyn IOTDataClientInner>) -> Self {
+    pub fn with_inner(self, inner: Rc<dyn IOTDataClientInner>) -> Self {
         IOTDataClient { inner }
     }
 }
@@ -88,7 +90,7 @@ impl IOTDataClient {
 impl Default for IOTDataClient {
     fn default() -> Self {
         IOTDataClient {
-            inner: Box::new(DefaultIODataClientInner),
+            inner: Rc::new(DefaultIODataClientInner),
         }
     }
 }
@@ -162,13 +164,13 @@ pub mod test {
         let topic = "foo";
         let message = "this is my message";
 
-        let mut call_holder = Rc::new(CallHolder::<PublishRaw>::new());
+        let call_holder = Rc::new(CallHolder::<PublishRaw>::new());
 
         let inner = MockInner {
             publish_raw_call: Rc::clone(&call_holder),
         };
 
-        let client = IOTDataClient::default().with_inner(Box::new(inner));
+        let client = IOTDataClient::default().with_inner(Rc::new(inner));
 
         let response = client.publish(topic, message).unwrap();
 

@@ -10,7 +10,8 @@
 //! pub fn main() -> std::io::Result<()> {
 //!     gglog::init_log(LevelFilter::Info);
 //!     init().map_err(|e| e.as_ioerror());
-//!     IOTDataClient::publish("mytopic", r#"{"msg": "foo"}"#).map_err(|e| e.as_ioerror())
+//!     let _result = IOTDataClient::default().publish("mytopic", r#"{"msg": "foo"}"#).map_err(|e| e.as_ioerror());
+//!     Ok(())
 //! }
 //! ```
 #![allow(non_upper_case_globals)]
@@ -56,7 +57,7 @@ impl Initializer {
     /// use aws_greengrass_core_rust::runtime::Runtime;
     /// use aws_greengrass_core_rust::Initializer;
     ///
-    /// Initializer::default()::with_runtime(Runtime::default());
+    /// Initializer::default().with_runtime(Runtime::default());
     /// ```
     pub fn with_runtime(self, runtime: Runtime) -> Self {
         Initializer { runtime, ..self }
@@ -75,4 +76,50 @@ impl Default for Initializer {
 /// Initialize the Greengrass runtime without a handler
 pub fn init() -> GGResult<()> {
     Initializer::default().init()
+}
+
+#[cfg(test)]
+pub mod test {
+    use std::cell::{Ref, RefCell};
+
+    /// Provides a mechanism that can be used to save calls from a Mock implementation
+    /// ```rust
+    /// use aws_greengrass_core_rust::test::CallHolder;
+    /// use std::rc::Rc;
+    ///
+    /// trait MyTrait {
+    ///     fn call(&self, foo: &str);
+    /// }
+    ///
+    /// struct MockImpl {
+    ///     call_holder: Rc<CallHolder<String>>
+    /// }
+    ///
+    /// impl MockTrait for MockImpl {
+    ///     fn call(&self, foo: &str) {
+    ///         self.call_holder.push(foo.to_owned());
+    ///     }
+    /// }
+    /// ```
+    pub struct CallHolder<T> {
+        calls: RefCell<Vec<T>>,
+    }
+
+    impl<T> CallHolder<T> {
+        pub fn new() -> Self {
+            CallHolder {
+                calls: RefCell::new(Vec::<T>::new()),
+            }
+        }
+
+        /// Push new call information to the internal RefCell
+        pub fn push(&self, call: T) {
+            self.calls.borrow_mut().push(call)
+        }
+
+        /// Return all the calls made
+        pub fn calls(&self) -> Ref<Vec<T>> {
+            self.calls.borrow()
+        }
+    }
 }

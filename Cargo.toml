@@ -4,6 +4,9 @@ version = "0.1.20"
 authors = ["Pete Matern <pete.matern@nike.com", "Jack Wright <jack.wright@nike.com>"]
 edition = "2018"
 
+[features]
+mock = []
+
 [build-dependencies]
 bindgen = "0.52.0"
 

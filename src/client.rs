@@ -8,7 +8,7 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 #[cfg(not(feature = "mock"))]
 use std::ptr;
-use log::info;
+use log::{info, warn};
 
 #[cfg(feature = "mock")]
 use self::mock::*;
@@ -123,6 +123,7 @@ impl IOTDataClient {
     /// Mock version. Input put will be captured in mocks and output if provided will be returned
     #[cfg(feature = "mock")]
     pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
+        warn!("Mock publish_raw is being executed!!! This should not happen in prod!!!!");
         self.mocks.publish_raw_inputs.borrow_mut().push(PublishRawInput(topic.to_owned(), buffer.to_owned(), read));
         // If there is an output return the output
         if let Some(output) = self.mocks.publish_raw_outputs.borrow_mut().pop() {

@@ -198,6 +198,9 @@ pub mod mock {
         }
     }
 
+    unsafe impl Send for MockHolder {}
+    unsafe impl Sync for MockHolder {}
+
     #[cfg(test)]
     mod test {
         use super::*;

@@ -8,6 +8,7 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 #[cfg(not(feature = "mock"))]
 use std::ptr;
+use log::info;
 
 #[cfg(feature = "mock")]
 use self::mock::*;
@@ -93,6 +94,7 @@ impl IOTDataClient {
     #[cfg(not(feature = "mock"))]
     pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
         unsafe {
+            info!("Publishing message of length {} to topic {}", read, topic);
             let mut req: gg_request = ptr::null_mut();
             let req_init = gg_request_init(&mut req);
             GGError::from_code(req_init)?;

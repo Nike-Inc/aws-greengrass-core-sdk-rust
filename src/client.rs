@@ -2,15 +2,12 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use std::convert::TryFrom;
 use std::default::Default;
-#[cfg(not(feature = "mock"))]
 use std::ffi::CString;
-#[cfg(not(feature = "mock"))]
 use std::os::raw::c_void;
-#[cfg(not(feature = "mock"))]
 use std::ptr;
 use log::{info, warn};
 
-#[cfg(feature = "mock")]
+#[cfg(all(test, feature = "mock"))]
 use self::mock::*;
 
 use crate::error::GGError;
@@ -78,10 +75,11 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
 pub struct IOTDataClient {
     /// When the mock feature is turned on this field will contain captured input
     /// and values to be returned
-    #[cfg(feature = "mock")]
+    #[cfg(all(test, feature = "mock"))]
     pub mocks: MockHolder,
 }
 
+#[cfg(not(all(test, feature = "mock")))]
 impl IOTDataClient {
     /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
     pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<GGRequestResponse> {
@@ -91,7 +89,6 @@ impl IOTDataClient {
     }
 
     /// Raw publish method that wraps gg_request_init, gg_publish
-    #[cfg(not(feature = "mock"))]
     pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
         unsafe {
             info!("Publishing message of length {} to topic {}", read, topic);
@@ -120,8 +117,17 @@ impl IOTDataClient {
         }
     }
 
-    /// Mock version. Input put will be captured in mocks and output if provided will be returned
-    #[cfg(feature = "mock")]
+}
+
+#[cfg(all(test, feature = "mock"))]
+impl IOTDataClient {
+    /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
+    pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<GGRequestResponse> {
+        let as_bytes = message.as_ref();
+        let size = as_bytes.len();
+        self.publish_raw(topic, as_bytes, size)
+    }
+
     pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
         warn!("Mock publish_raw is being executed!!! This should not happen in prod!!!!");
         self.mocks.publish_raw_inputs.borrow_mut().push(PublishRawInput(topic.to_owned(), buffer.to_owned(), read));
@@ -136,7 +142,7 @@ impl IOTDataClient {
 
     /// When the mock feature is turned on this will contain captured inputs and return
     /// provided outputs
-    #[cfg(feature = "mock")]
+    #[cfg(all(test, feature = "mock"))]
     pub fn with_mocks(self, mocks: MockHolder) -> Self {
         IOTDataClient {
             mocks,
@@ -149,13 +155,13 @@ impl IOTDataClient {
 impl Default for IOTDataClient {
     fn default() -> Self {
         IOTDataClient {
-            #[cfg(feature = "mock")]
+            #[cfg(all(test, feature = "mock"))]
             mocks: MockHolder::default(),
         }
     }
 }
 
-#[cfg(feature = "mock")]
+#[cfg(all(test, feature = "mock"))]
 pub mod mock {
     use super::*;
     use std::cell::RefCell;
@@ -217,6 +223,7 @@ pub mod mock {
                 MockHolder::default().with_publish_raw_outputs(vec![Ok(GGRequestResponse::default())]);
             let client = IOTDataClient::default().with_mocks(mocks);
             let response = client.publish(topic, message).unwrap();
+            println!("response: {:?}", response);
 
             let PublishRawInput(raw_topic, raw_bytes, raw_read) = &client.mocks.publish_raw_inputs.borrow()[0];
             assert_eq!(raw_topic, topic);

@@ -18,14 +18,17 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+mod bindings;
 pub mod client;
 pub mod error;
 pub mod handler;
 pub mod log;
 pub mod runtime;
 pub mod secret;
-
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+pub mod request;
+pub mod shadow;
 
 use crate::error::GGError;
 use crate::runtime::Runtime;

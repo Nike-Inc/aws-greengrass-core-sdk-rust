@@ -1,5 +1,3 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
 use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::CString;
@@ -10,6 +8,7 @@ use log::{info, warn};
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
 
+use crate::bindings::*;
 use crate::error::GGError;
 use crate::GGResult;
 

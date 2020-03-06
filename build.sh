@@ -1,50 +1,32 @@
 #!/bin/sh
 
-NAME="aws_greengrass_core_sdk_rust"
+BASE_DOCKER_VERSION=v1
+WORKING_DIRECTORY='/src'
 
-usage() {
-  cat << EOF >&2
-Usage: $PROGNAME [-c|-nc|-h]
+if [ "$#" -eq 1 ]; then
+  EXAMPLE="$1"
+  CARGO_LINE="--example ${EXAMPLE}"
+else
+  CARGO_LINE="--release"
+fi
 
- -c : command (build, test)
- -nc : no cache
- -h : this message
+CACHE_DIRECTORY=~/tmp/aws-greengrass-core-sdk-rust
 
-EOF
-  exit 1
-}
+mkdir -p ~/tmp/ > /dev/null 2>&1
 
-command=""
-dir=default_dir file=default_file verbose_level=0
-while getopts "nc:" o; do
-  case $o in
-    (n) nocache="--no-cache";;
-    (c) command=${OPTARG};;
-    # (d) dir=$OPTARG;;
-    # (v) verbose_level=$((verbose_level + 1));;
-    (*) usage
-  esac
-done
-shift "$((OPTIND - 1))"
+USER=$(id -u)
+GROUP=$(id -g)
 
-mkdir ./target > /dev/null 2>&1
-cargo_version=$(grep -e '^version' Cargo.toml | awk '{print $3}' | sed -e 's/\"//g')
-docker build $nocache --build-arg CARGO_VERSION:$cargo_version -t $NAME .
-docker_exit_code=$?
+echo $CARGO_LINE
 
-if [ $docker_exit_code -eq 0 ]; then 
-    case $command in 
-        "test")
-            docker run -it --entrypoint cargo $NAME -- "test"
-            ;;
-        "shell")
-            docker run -it --entrypoint /bin/bash $NAME
-            ;;
-        *)
-            echo "Copying to /target/docker_release"
-            docker run --rm -v $(pwd):/data $NAME
-            ;;
-    esac
-else 
-    >&2 echo "$0 exited with status $docker_exit_code" 
+docker run --rm --user "root:root" \
+  -e CARGO_HOME:/cargo \
+  -v "$PWD":"${WORKING_DIRECTORY}" \
+  -v $CACHE_DIRECTORY/cargo-git:/usr/local/cargo/git \
+  -v $CACHE_DIRECTORY/cargo-registry:/usr/local/cargo/registry \
+  -v $CACHE_DIRECTORY/target:"${WORKING_DIRECTORY}/target" \
+  -w $WORKING_DIRECTORY artifactory.nike.com:9002/eap/rust-greengrass-base:$BASE_DOCKER_VERSION cargo build $CARGO_LINE
+
+if [ "${EXAMPLE+1}" ]; then
+    zip -j ./target/$EXAMPLE.zip ~/tmp/aws-greengrass-core-sdk-rust/target/debug/examples/$EXAMPLE
 fi

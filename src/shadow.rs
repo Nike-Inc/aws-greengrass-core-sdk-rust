@@ -1,13 +1,13 @@
 use std::ffi::CString;
-use std::os::raw::{c_char, c_void};
 use std::ptr;
 use serde_json::{self, Value};
 use std::convert::TryFrom;
 
 use crate::bindings::*;
-use crate::request::{GGRequestResponse, read_response_data};
+use crate::request::{GGRequestResponse, read_response_data, ErrorResponse};
 use crate::GGResult;
 use crate::error::GGError;
+use crate::try_clean;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use std::default::Default;
@@ -28,14 +28,25 @@ impl ShadowClient {
     /// use serde_json::Value;
     /// use aws_greengrass_core_rust::shadow::ShadowClient;
     ///
-    /// if let Ok((json, res)) = ShadowClient::default().get_thing_shadow::<Value>("my_thing") {
-    ///     println!("Retrieved: {:?}", json);
+    /// if let Ok(maybe_json) = ShadowClient::default().get_thing_shadow::<Value>("my_thing") {
+    ///     println!("Retrieved: {:?}", maybe_json);
     /// }
     /// ```
-    pub fn get_thing_shadow<'a, T: DeserializeOwned>(&self, thing_name: &str) -> GGResult<(T, GGRequestResponse)> {
+    pub fn get_thing_shadow<'a, T: DeserializeOwned>(&self, thing_name: &str) -> GGResult<Option<T>> {
         let (bytes, response) = read_thing_shadow(thing_name)?;
-        let json: T = serde_json::from_slice(&bytes).map_err(GGError::from)?;
-        Ok((json,response))
+        // First check to see if the response contains an error
+        // This might be a bit inefficient, but I couldn't think of a better way to do it at the time
+        // as type T could just be Value or another type that would be successful in parsing, making the API inconsistent
+        if let Ok(err_response) = serde_json::from_slice::<ErrorResponse>(&bytes) {
+            match err_response.code {
+                404 => Ok(None),
+                _ => Err(GGError::Unknown(format!("code: {}, message: {}", err_response.code, err_response.message)))
+            }
+        }
+        else {
+            let json: T = serde_json::from_slice(&bytes).map_err(GGError::from)?;
+            Ok(Some(json))
+        }
     }
 
     /// Updates a shadow thing with the specified document.
@@ -44,7 +55,7 @@ impl ShadowClient {
     ///
     /// * `thing_name` - The name of the device to update the shadow document
     /// * `doc` - Json serializable content to update
-    pub fn update_thing_shadow<T: Serialize>(&self, thing_name: &str, doc: &T) -> GGResult<GGRequestResponse> {
+    pub fn update_thing_shadow<T: Serialize>(&self, thing_name: &str, doc: &T) -> GGResult<()> {
         let json_string = serde_json::to_string(doc).map_err(GGError::from)?;
         unsafe {
             let thing_name_c = CString::new(thing_name).map_err(GGError::from)?;
@@ -64,11 +75,23 @@ impl ShadowClient {
                 json_string_c.as_ptr(),
                 &mut res,
             );
+            try_clean!(req, GGError::from_code(update_res));
 
-            let close_res = gg_request_close(req);
-            GGError::from_code(close_res)?;
+            let response = try_clean!(req, GGRequestResponse::try_from(&res));
+            if response.is_error() {
+                let response_bytes = try_clean!(req, read_response_data(req));
+                let error_response = try_clean!(req, ErrorResponse::try_from(response_bytes.as_slice()));
+                let response_2 = response.with_error_response(Some(error_response));
 
-            GGRequestResponse::try_from(&res)
+                let close_res = gg_request_close(req);
+                GGError::from_code(close_res)?;
+
+                Err(GGError::ErrorResponse(response_2))
+            } else {
+                let close_res = gg_request_close(req);
+                GGError::from_code(close_res)?;
+                Ok(())
+            }
         }
     }
 

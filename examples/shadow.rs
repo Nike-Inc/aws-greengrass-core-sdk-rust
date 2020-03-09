@@ -3,30 +3,137 @@ use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::Runtime;
 use aws_greengrass_core_rust::{Initializer, GGResult};
 use aws_greengrass_core_rust::shadow::ShadowClient;
+use aws_greengrass_core_rust::client::IOTDataClient;
+use aws_greengrass_core_rust::error::GGError;
 use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use std::default::Default;
 
 use log::{error, info, LevelFilter};
-use std::{thread, time};
 
-const DEFAULT_THING_NAME: &'static str = "foo";
+const DEFAULT_SEND_TOPIC: &'static str = "/shadow-example/device-sent";
 
 struct ShadowHandler {
-    thing_name: String,
+    iot_data_client: IOTDataClient,
+    shadow_client: ShadowClient,
+    send_topic: String,
 }
 
 impl ShadowHandler {
     pub fn new() -> Self {
-        let thing_name = std::env::var("THING_NAME")
-            .unwrap_or(DEFAULT_THING_NAME.to_owned());
+        let send_topic = std::env::var("SEND_TOPIC")
+            .unwrap_or(DEFAULT_SEND_TOPIC.to_owned());
+
         ShadowHandler {
-            thing_name
+            iot_data_client: IOTDataClient::default(),
+            shadow_client: ShadowClient::default(),
+            send_topic,
         }
+    }
+
+    fn do_stuff_with_thing(&self, body: &[u8]) -> GGResult<()> {
+        match serde_json::from_slice::<Command>(body) {
+            Ok(ref command) => self.handle_command(command),
+            Err(_) => {
+                let response: Response<EmptyBody> = Response::default()
+                    .with_code(400)
+                    .with_message(Some("Did not receive a valid command object".to_owned()));
+                self.publish(&response)
+            }
+        }
+    }
+
+    fn handle_command(&self, c: &Command) -> GGResult<()> {
+        match c.r#type {
+            // Get will attempt to grab a document and publish it to an MQTT topic
+            CommandType::Get => self.handle_get(c),
+            // Attempt to update a shadow thing based on the document we received
+            CommandType::Update => self.handle_update(c),
+            // Delete the shadow document for the specified thing
+            CommandType::Delete => self.handle_delete(c)
+        }
+    }
+
+    fn handle_get(&self, command: &Command) -> GGResult<()> {
+        match self.shadow_client.get_thing_shadow::<Value>(&command.thing_name) {
+            // We grabbed the document, send it.
+            Ok(Some(thing)) => {
+                info!("Shadow Thing: {:#?}", thing);
+                let response = Response::default()
+                    .with_code(200)
+                    .with_body(Some(Box::new(thing)));
+                self.publish(&response)
+            }
+            // We got a 404 back, respond
+            Ok(_) => {
+                info!("No shadow doc found for thing: {:?}", &command.thing_name);
+                let response: Response<EmptyBody> = Response::default()
+                    .with_code(404)
+                    .with_message(Some("No shadow document for thing".to_owned()));
+                self.publish(&response)
+            }
+            Err(ref e) => self.handle_error(e)
+        }
+    }
+
+    fn handle_update(&self, command: &Command) -> GGResult<()> {
+        if let Some(ref document) = command.document {
+            match self.shadow_client.update_thing_shadow(&command.thing_name, &document) {
+                Ok(_) => {
+                    let response: Response<EmptyBody> = Response::default()
+                        .with_code(200)
+                        .with_message(Some(format!("Updated shadow for thing {} successfully", command.thing_name)));
+                    self.publish(&response)
+                }
+                Err(ref e) => self.handle_error(e)
+            }
+        } else {
+            let response: Response<EmptyBody> = Response::default()
+                .with_code(400)
+                .with_message(Some(format!("No document specified to update thing: {}", command.thing_name)));
+            self.publish(&response)
+        }
+    }
+
+    fn handle_delete(&self, command: &Command) -> GGResult<()> {
+        match self.shadow_client.delete_thing_shadow(&command.thing_name) {
+            Ok(_) => {
+                let response: Response<EmptyBody> = Response::default()
+                    .with_code(200)
+                    .with_message(Some(format!("Shadow for thing {} successfully deleted.", command.thing_name)));
+                self.publish(&response)
+            }
+            Err(ref e) => self.handle_error(e)
+        }
+    }
+
+    fn handle_error(&self, err: &GGError) -> GGResult<()> {
+        match err {
+            GGError::ErrorResponse(e) => {
+                let code = e.error_response.as_ref().map(|er| er.code).unwrap_or(500);
+                let response = Response::default()
+                    .with_code(code)
+                    .with_body(Some(Box::new(e.clone())));
+                self.publish(&response)
+            }
+            _ => {
+                let response: Response<EmptyBody> = Response::default()
+                    .with_code(500)
+                    .with_message(Some(format!("Error occurred: {}", err)));
+                self.publish(&response)
+            }
+        }
+    }
+
+    fn publish<T: Serialize>(&self, response: &Response<T>) -> GGResult<()> {
+        self.iot_data_client.publish_json(&self.send_topic, response)
+            .map(|_| ())
     }
 }
 
 impl Handler for ShadowHandler {
-    fn handle(&self, _ctx: LambdaContext) {
-        if let Err(e) = do_stuff_with_thing() {
+    fn handle(&self, ctx: LambdaContext) {
+        if let Err(e) = self.do_stuff_with_thing(&ctx.message) {
             error!("Error calling shadows api: {}", e);
         }
     }
@@ -44,9 +151,52 @@ fn main() {
 }
 
 
-fn do_stuff_with_thing() -> GGResult<()> {
-    let (thing, response) = ShadowClient::default().get_thing_shadow::<Value>("foo")?;
-    info!("response: {:?}", response);
-    info!("Shadow Thing: {:#?}", thing);
-    Ok(())
+#[derive(Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum CommandType {
+    Update,
+    Get,
+    Delete,
 }
+
+#[derive(Deserialize)]
+struct Command {
+    thing_name: String,
+    r#type: CommandType,
+    document: Option<Value>
+}
+
+#[derive(Serialize, Default)]
+struct Response<T: Serialize> {
+    code: u16,
+    message: Option<String>,
+    body: Option<Box<T>>,
+}
+
+impl <T:Serialize> Response<T> {
+
+    fn with_code(self, code: u16) -> Self {
+        Response {
+            code,
+            ..self
+        }
+    }
+
+    fn with_message(self, message: Option<String>) -> Self {
+        Response {
+            message,
+            ..self
+        }
+    }
+
+    fn with_body(self, body: Option<Box<T>>) -> Self {
+        Response {
+            body,
+            ..self
+        }
+    }
+}
+
+/// Use to statisfy type constraints when there isn't a body
+#[derive(Serialize, Debug, Default)]
+struct EmptyBody;

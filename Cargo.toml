@@ -9,7 +9,7 @@ default = []
 mock = []
 
 [build-dependencies]
-bindgen = "0.52.0"]
+bindgen = "0.52.0"
 
 [dependencies]
 log = "^0.4"

@@ -16,6 +16,9 @@ use std::default::Default;
 use self::mock::*;
 use std::borrow::BorrowMut;
 
+/// Provides the ability to interfact with a Thing's (Device) Shadow document
+///
+/// Information on shadow documents can be found at: https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html#device-shadow-example
 #[derive(Clone)]
 pub struct ShadowClient {
     /// When the mock feature is turned on this field will contain captured input
@@ -70,6 +73,17 @@ impl ShadowClient {
     ///
     /// * `thing_name` - The name of the device to update the shadow document
     /// * `doc` - Json serializable content to update
+    ///
+    /// # Examples
+    /// ```rust
+    /// use serde::Serialize;
+    /// use aws_greengrass_core_rust::shadow::ShadowClient;
+    ///
+    /// #[derive(Serialize)]
+    /// struct MyStruct;
+    ///
+    /// let result = ShadowClient::default().update_thing_shadow("foo", &MyStruct);
+    /// ```
     #[cfg(not(all(test, feature = "mock")))]
     pub fn update_thing_shadow<T: Serialize>(&self, thing_name: &str, doc: &T) -> GGResult<()> {
         let json_string = serde_json::to_string(doc).map_err(GGError::from)?;

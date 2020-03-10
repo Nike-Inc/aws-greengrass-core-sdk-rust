@@ -1,19 +1,19 @@
+use log::{info, warn};
+use serde::ser::Serialize;
 use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use log::info;
-use serde::ser::Serialize;
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
 
 use crate::bindings::*;
 use crate::error::GGError;
-use crate::GGResult;
+use crate::request::{read_response_data, ErrorResponse, GGRequestResponse};
 use crate::try_clean;
-use crate::request::{GGRequestResponse, read_response_data, ErrorResponse};
+use crate::GGResult;
 
 #[derive(Clone)]
 pub struct IOTDataClient {
@@ -64,8 +64,7 @@ impl IOTDataClient {
             let response = try_clean!(req, GGRequestResponse::try_from(&res));
             if response.is_error() {
                 let result = try_clean!(req, read_response_data(req));
-                let error_response =
-                    try_clean!(req, ErrorResponse::try_from(result.as_slice()));
+                let error_response = try_clean!(req, ErrorResponse::try_from(result.as_slice()));
 
                 let response_2 = response.with_error_response(Some(error_response));
                 let close_res = gg_request_close(req);
@@ -79,16 +78,22 @@ impl IOTDataClient {
         }
     }
 
+    // -----------------------------------
+    // Mock methods
+    // -----------------------------------
+
     #[cfg(all(test, feature = "mock"))]
-    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
+    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
         warn!("Mock publish_raw is being executed!!! This should not happen in prod!!!!");
-        self.mocks.publish_raw_inputs.borrow_mut().push(PublishRawInput(topic.to_owned(), buffer.to_owned(), read));
+        self.mocks
+            .publish_raw_inputs
+            .borrow_mut()
+            .push(PublishRawInput(topic.to_owned(), buffer.to_owned(), read));
         // If there is an output return the output
         if let Some(output) = self.mocks.publish_raw_outputs.borrow_mut().pop() {
             output
-        }
-        else {
-            Ok(GGRequestResponse::default())
+        } else {
+            Ok(())
         }
     }
 
@@ -96,12 +101,8 @@ impl IOTDataClient {
     /// provided outputs
     #[cfg(all(test, feature = "mock"))]
     pub fn with_mocks(self, mocks: MockHolder) -> Self {
-        IOTDataClient {
-            mocks,
-            ..self
-        }
+        IOTDataClient { mocks, ..self }
     }
-
 }
 
 impl Default for IOTDataClient {
@@ -126,11 +127,11 @@ pub mod mock {
     #[derive(Debug)]
     pub struct MockHolder {
         pub publish_raw_inputs: RefCell<Vec<PublishRawInput>>,
-        pub publish_raw_outputs: RefCell<Vec<GGResult<GGRequestResponse>>>,
+        pub publish_raw_outputs: RefCell<Vec<GGResult<()>>>,
     }
 
     impl MockHolder {
-        pub fn with_publish_raw_outputs(self, publish_raw_outputs: Vec<GGResult<GGRequestResponse>>) -> Self {
+        pub fn with_publish_raw_outputs(self, publish_raw_outputs: Vec<GGResult<()>>) -> Self {
             MockHolder {
                 publish_raw_outputs: RefCell::new(publish_raw_outputs),
                 ..self
@@ -159,6 +160,8 @@ pub mod mock {
         }
     }
 
+    // Note: This is to get past compile issues.. Mock testing for threads
+    // could result in undefined behavior
     unsafe impl Send for MockHolder {}
     unsafe impl Sync for MockHolder {}
 
@@ -171,13 +174,13 @@ pub mod mock {
             let topic = "foo";
             let message = "this is my message";
 
-            let mocks =
-                MockHolder::default().with_publish_raw_outputs(vec![Ok(GGRequestResponse::default())]);
+            let mocks = MockHolder::default().with_publish_raw_outputs(vec![Ok(())]);
             let client = IOTDataClient::default().with_mocks(mocks);
             let response = client.publish(topic, message).unwrap();
             println!("response: {:?}", response);
 
-            let PublishRawInput(raw_topic, raw_bytes, raw_read) = &client.mocks.publish_raw_inputs.borrow()[0];
+            let PublishRawInput(raw_topic, raw_bytes, raw_read) =
+                &client.mocks.publish_raw_inputs.borrow()[0];
             assert_eq!(raw_topic, topic);
         }
     }

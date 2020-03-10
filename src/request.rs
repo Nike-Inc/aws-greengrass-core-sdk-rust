@@ -1,10 +1,10 @@
-use std::default::Default;
-use std::convert::TryFrom;
-use std::ffi::c_void;
-use crate::error::GGError;
 use crate::bindings::*;
-use serde::{Deserialize, Serialize};
+use crate::error::GGError;
 use crate::GGResult;
+use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+use std::default::Default;
+use std::ffi::c_void;
 
 /// The size of buffer we will use when reading results
 /// from the C API
@@ -51,7 +51,6 @@ pub struct GGRequestResponse {
 }
 
 impl GGRequestResponse {
-
     pub fn with_error_response(self, error_response: Option<ErrorResponse>) -> Self {
         GGRequestResponse {
             error_response,
@@ -62,7 +61,6 @@ impl GGRequestResponse {
     pub fn is_error(&self) -> bool {
         self.request_status != GGRequestStatus::Success
     }
-
 }
 
 impl Default for GGRequestResponse {
@@ -86,7 +84,6 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
     }
 }
 
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ErrorResponse {
     pub code: u16,
@@ -98,11 +95,9 @@ impl TryFrom<&[u8]> for ErrorResponse {
     type Error = GGError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        serde_json::from_slice(value)
-            .map_err(Self::Error::from)
+        serde_json::from_slice(value).map_err(Self::Error::from)
     }
 }
-
 
 /// Reads the response data from the gg_request_reqd call
 pub(crate) fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {

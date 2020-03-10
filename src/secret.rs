@@ -1,7 +1,7 @@
-use crate::error::GGError;
-use crate::GGResult;
-use crate::request::read_response_data;
 use crate::bindings::*;
+use crate::error::GGError;
+use crate::request::read_response_data;
+use crate::GGResult;
 use serde::Deserialize;
 use std::convert::{AsRef, From};
 use std::default::Default;

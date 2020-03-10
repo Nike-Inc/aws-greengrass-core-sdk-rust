@@ -25,9 +25,9 @@ pub mod client;
 pub mod error;
 pub mod handler;
 pub mod log;
+pub mod request;
 pub mod runtime;
 pub mod secret;
-pub mod request;
 pub mod shadow;
 
 use crate::error::GGError;

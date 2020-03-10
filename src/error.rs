@@ -1,5 +1,5 @@
-use crate::handler::LambdaContext;
 use crate::bindings::*;
+use crate::handler::LambdaContext;
 use crate::request::GGRequestResponse;
 use crate::GGResult;
 use crossbeam_channel::{RecvError, SendError};
@@ -21,7 +21,7 @@ macro_rules! try_clean {
             GGResult::Err(err) => {
                 let close_res = gg_request_close($req);
                 GGError::from_code(close_res)?;
-                return Err(err)
+                return Err(err);
             }
         }
     };

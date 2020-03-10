@@ -1,12 +1,12 @@
+use aws_greengrass_core_rust::client::IOTDataClient;
+use aws_greengrass_core_rust::error::GGError;
 use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
 use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::Runtime;
-use aws_greengrass_core_rust::{Initializer, GGResult};
 use aws_greengrass_core_rust::shadow::ShadowClient;
-use aws_greengrass_core_rust::client::IOTDataClient;
-use aws_greengrass_core_rust::error::GGError;
-use serde_json::Value;
+use aws_greengrass_core_rust::{GGResult, Initializer};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::default::Default;
 
 use log::{error, info, LevelFilter};
@@ -21,8 +21,7 @@ struct ShadowHandler {
 
 impl ShadowHandler {
     pub fn new() -> Self {
-        let send_topic = std::env::var("SEND_TOPIC")
-            .unwrap_or(DEFAULT_SEND_TOPIC.to_owned());
+        let send_topic = std::env::var("SEND_TOPIC").unwrap_or(DEFAULT_SEND_TOPIC.to_owned());
 
         ShadowHandler {
             iot_data_client: IOTDataClient::default(),
@@ -50,12 +49,15 @@ impl ShadowHandler {
             // Attempt to update a shadow thing based on the document we received
             CommandType::Update => self.handle_update(c),
             // Delete the shadow document for the specified thing
-            CommandType::Delete => self.handle_delete(c)
+            CommandType::Delete => self.handle_delete(c),
         }
     }
 
     fn handle_get(&self, command: &Command) -> GGResult<()> {
-        match self.shadow_client.get_thing_shadow::<Value>(&command.thing_name) {
+        match self
+            .shadow_client
+            .get_thing_shadow::<Value>(&command.thing_name)
+        {
             // We grabbed the document, send it.
             Ok(Some(thing)) => {
                 info!("Shadow Thing: {:#?}", thing);
@@ -72,25 +74,35 @@ impl ShadowHandler {
                     .with_message(Some("No shadow document for thing".to_owned()));
                 self.publish(&response)
             }
-            Err(ref e) => self.handle_error(e)
+            Err(ref e) => self.handle_error(e),
         }
     }
 
     fn handle_update(&self, command: &Command) -> GGResult<()> {
         if let Some(ref document) = command.document {
-            match self.shadow_client.update_thing_shadow(&command.thing_name, &document) {
+            match self
+                .shadow_client
+                .update_thing_shadow(&command.thing_name, &document)
+            {
                 Ok(_) => {
                     let response: Response<EmptyBody> = Response::default()
                         .with_code(200)
-                        .with_message(Some(format!("Updated shadow for thing {} successfully", command.thing_name)));
+                        .with_message(Some(format!(
+                            "Updated shadow for thing {} successfully",
+                            command.thing_name
+                        )));
                     self.publish(&response)
                 }
-                Err(ref e) => self.handle_error(e)
+                Err(ref e) => self.handle_error(e),
             }
         } else {
-            let response: Response<EmptyBody> = Response::default()
-                .with_code(400)
-                .with_message(Some(format!("No document specified to update thing: {}", command.thing_name)));
+            let response: Response<EmptyBody> =
+                Response::default()
+                    .with_code(400)
+                    .with_message(Some(format!(
+                        "No document specified to update thing: {}",
+                        command.thing_name
+                    )));
             self.publish(&response)
         }
     }
@@ -100,10 +112,13 @@ impl ShadowHandler {
             Ok(_) => {
                 let response: Response<EmptyBody> = Response::default()
                     .with_code(200)
-                    .with_message(Some(format!("Shadow for thing {} successfully deleted.", command.thing_name)));
+                    .with_message(Some(format!(
+                        "Shadow for thing {} successfully deleted.",
+                        command.thing_name
+                    )));
                 self.publish(&response)
             }
-            Err(ref e) => self.handle_error(e)
+            Err(ref e) => self.handle_error(e),
         }
     }
 
@@ -126,7 +141,8 @@ impl ShadowHandler {
     }
 
     fn publish<T: Serialize>(&self, response: &Response<T>) -> GGResult<()> {
-        self.iot_data_client.publish_json(&self.send_topic, response)
+        self.iot_data_client
+            .publish_json(&self.send_topic, response)
             .map(|_| ())
     }
 }
@@ -150,7 +166,6 @@ fn main() {
     }
 }
 
-
 #[derive(Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum CommandType {
@@ -163,7 +178,7 @@ enum CommandType {
 struct Command {
     thing_name: String,
     r#type: CommandType,
-    document: Option<Value>
+    document: Option<Value>,
 }
 
 #[derive(Serialize, Default)]
@@ -173,27 +188,17 @@ struct Response<T: Serialize> {
     body: Option<Box<T>>,
 }
 
-impl <T:Serialize> Response<T> {
-
+impl<T: Serialize> Response<T> {
     fn with_code(self, code: u16) -> Self {
-        Response {
-            code,
-            ..self
-        }
+        Response { code, ..self }
     }
 
     fn with_message(self, message: Option<String>) -> Self {
-        Response {
-            message,
-            ..self
-        }
+        Response { message, ..self }
     }
 
     fn with_body(self, body: Option<Box<T>>) -> Self {
-        Response {
-            body,
-            ..self
-        }
+        Response { body, ..self }
     }
 }
 

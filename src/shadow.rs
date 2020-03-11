@@ -154,7 +154,7 @@ impl ShadowClient {
             };
 
             let delete_res = gg_delete_thing_shadow(req, thing_name_c.as_ptr(), &mut res_c);
-            try_clean!(req, GGError::from_code(req_init));
+            try_clean!(req, GGError::from_code(delete_res));
 
             let response = try_clean!(req, GGRequestResponse::try_from(&res_c));
             if response.is_error() {

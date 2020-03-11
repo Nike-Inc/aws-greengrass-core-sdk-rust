@@ -1,75 +1,19 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
+use log::{info, warn};
+use serde::ser::Serialize;
 use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use log::{info, warn};
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
 
+use crate::bindings::*;
 use crate::error::GGError;
+use crate::request::{read_response_data, ErrorResponse, GGRequestResponse};
+use crate::try_clean;
 use crate::GGResult;
-
-/// Greengrass SDK request status enum
-/// Maps to gg_request_status
-#[derive(Debug, Clone)]
-pub enum GGRequestStatus {
-    /// function call returns expected payload type
-    Success,
-    /// function call is successfull, however lambda responded with an error
-    Handled,
-    /// function call is unsuccessfull, lambda exits abnormally
-    Unhandled,
-    /// System encounters unknown error. Check logs for more details
-    Unknown,
-    /// function call is throttled, try again
-    Again,
-}
-
-impl TryFrom<&gg_request_status> for GGRequestStatus {
-    type Error = GGError;
-
-    fn try_from(value: &gg_request_status) -> Result<Self, Self::Error> {
-        match value {
-            &gg_request_status_GG_REQUEST_SUCCESS => Ok(Self::Success),
-            &gg_request_status_GG_REQUEST_HANDLED => Ok(Self::Handled),
-            &gg_request_status_GG_REQUEST_UNHANDLED => Ok(Self::Unhandled),
-            &gg_request_status_GG_REQUEST_UNKNOWN => Ok(Self::Unknown),
-            &gg_request_status_GG_REQUEST_AGAIN => Ok(Self::Again),
-            _ => Err(Self::Error::Unknown(format!(
-                "Unknown error code: {}",
-                value
-            ))),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct GGRequestResponse {
-    pub request_status: GGRequestStatus,
-}
-
-impl Default for GGRequestResponse {
-    fn default() -> Self {
-        GGRequestResponse {
-            request_status: GGRequestStatus::Success,
-        }
-    }
-}
-
-impl TryFrom<&gg_request_result> for GGRequestResponse {
-    type Error = GGError;
-
-    fn try_from(value: &gg_request_result) -> Result<Self, Self::Error> {
-        let status = GGRequestStatus::try_from(&value.request_status)?;
-        Ok(GGRequestResponse {
-            request_status: status,
-        })
-    }
-}
 
 #[derive(Clone)]
 pub struct IOTDataClient {
@@ -79,24 +23,31 @@ pub struct IOTDataClient {
     pub mocks: MockHolder,
 }
 
-#[cfg(not(all(test, feature = "mock")))]
 impl IOTDataClient {
     /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
-    pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<GGRequestResponse> {
+    pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<()> {
         let as_bytes = message.as_ref();
         let size = as_bytes.len();
         self.publish_raw(topic, as_bytes, size)
     }
 
+    /// Publish anything that is a deserializable serde object
+    pub fn publish_json<T: Serialize>(&self, topic: &str, message: T) -> GGResult<()> {
+        let bytes = serde_json::to_vec(&message).map_err(GGError::from)?;
+        self.publish(topic, &bytes)
+    }
+
     /// Raw publish method that wraps gg_request_init, gg_publish
-    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
+    #[cfg(not(all(test, feature = "mock")))]
+    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
         unsafe {
             info!("Publishing message of length {} to topic {}", read, topic);
+            let topic_c = CString::new(topic).map_err(GGError::from)?;
+
             let mut req: gg_request = ptr::null_mut();
             let req_init = gg_request_init(&mut req);
             GGError::from_code(req_init)?;
 
-            let topic_c = CString::new(topic).map_err(GGError::from)?;
             let mut res = gg_request_result {
                 request_status: gg_request_status_GG_REQUEST_SUCCESS,
             };
@@ -108,35 +59,41 @@ impl IOTDataClient {
                 read,
                 &mut res,
             );
-            GGError::from_code(pub_res)?;
+            try_clean!(req, GGError::from_code(pub_res));
 
-            let close_res = gg_request_close(req);
-            GGError::from_code(close_res)?;
+            let response = try_clean!(req, GGRequestResponse::try_from(&res));
+            if response.is_error() {
+                let result = try_clean!(req, read_response_data(req));
+                let error_response = try_clean!(req, ErrorResponse::try_from(result.as_slice()));
 
-            GGRequestResponse::try_from(&res)
+                let response_2 = response.with_error_response(Some(error_response));
+                let close_res = gg_request_close(req);
+                GGError::from_code(close_res)?;
+                Err(GGError::ErrorResponse(response_2))
+            } else {
+                let close_res = gg_request_close(req);
+                GGError::from_code(close_res)?;
+                Ok(())
+            }
         }
     }
 
-}
+    // -----------------------------------
+    // Mock methods
+    // -----------------------------------
 
-#[cfg(all(test, feature = "mock"))]
-impl IOTDataClient {
-    /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
-    pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<GGRequestResponse> {
-        let as_bytes = message.as_ref();
-        let size = as_bytes.len();
-        self.publish_raw(topic, as_bytes, size)
-    }
-
-    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<GGRequestResponse> {
+    #[cfg(all(test, feature = "mock"))]
+    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
         warn!("Mock publish_raw is being executed!!! This should not happen in prod!!!!");
-        self.mocks.publish_raw_inputs.borrow_mut().push(PublishRawInput(topic.to_owned(), buffer.to_owned(), read));
+        self.mocks
+            .publish_raw_inputs
+            .borrow_mut()
+            .push(PublishRawInput(topic.to_owned(), buffer.to_owned(), read));
         // If there is an output return the output
         if let Some(output) = self.mocks.publish_raw_outputs.borrow_mut().pop() {
             output
-        }
-        else {
-            Ok(GGRequestResponse::default())
+        } else {
+            Ok(())
         }
     }
 
@@ -144,12 +101,8 @@ impl IOTDataClient {
     /// provided outputs
     #[cfg(all(test, feature = "mock"))]
     pub fn with_mocks(self, mocks: MockHolder) -> Self {
-        IOTDataClient {
-            mocks,
-            ..self
-        }
+        IOTDataClient { mocks, ..self }
     }
-
 }
 
 impl Default for IOTDataClient {
@@ -174,11 +127,11 @@ pub mod mock {
     #[derive(Debug)]
     pub struct MockHolder {
         pub publish_raw_inputs: RefCell<Vec<PublishRawInput>>,
-        pub publish_raw_outputs: RefCell<Vec<GGResult<GGRequestResponse>>>,
+        pub publish_raw_outputs: RefCell<Vec<GGResult<()>>>,
     }
 
     impl MockHolder {
-        pub fn with_publish_raw_outputs(self, publish_raw_outputs: Vec<GGResult<GGRequestResponse>>) -> Self {
+        pub fn with_publish_raw_outputs(self, publish_raw_outputs: Vec<GGResult<()>>) -> Self {
             MockHolder {
                 publish_raw_outputs: RefCell::new(publish_raw_outputs),
                 ..self
@@ -207,6 +160,8 @@ pub mod mock {
         }
     }
 
+    // Note: This is to get past compile issues.. Mock testing for threads
+    // could result in undefined behavior
     unsafe impl Send for MockHolder {}
     unsafe impl Sync for MockHolder {}
 
@@ -219,13 +174,13 @@ pub mod mock {
             let topic = "foo";
             let message = "this is my message";
 
-            let mocks =
-                MockHolder::default().with_publish_raw_outputs(vec![Ok(GGRequestResponse::default())]);
+            let mocks = MockHolder::default().with_publish_raw_outputs(vec![Ok(())]);
             let client = IOTDataClient::default().with_mocks(mocks);
             let response = client.publish(topic, message).unwrap();
             println!("response: {:?}", response);
 
-            let PublishRawInput(raw_topic, raw_bytes, raw_read) = &client.mocks.publish_raw_inputs.borrow()[0];
+            let PublishRawInput(raw_topic, raw_bytes, raw_read) =
+                &client.mocks.publish_raw_inputs.borrow()[0];
             assert_eq!(raw_topic, topic);
         }
     }

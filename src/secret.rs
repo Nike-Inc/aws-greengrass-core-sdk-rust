@@ -1,6 +1,6 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
+use crate::bindings::*;
 use crate::error::GGError;
+use crate::request::read_response_data;
 use crate::GGResult;
 use serde::Deserialize;
 use std::convert::{AsRef, From};
@@ -8,8 +8,6 @@ use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
-
-const BUFFER_SIZE: usize = 512;
 
 /// Handles requests to the SecretManager secrets
 /// that have been exposed to the green grass lambda
@@ -124,35 +122,6 @@ impl SecretRequestBuilder {
 struct ErrorResponse {
     status: u16,
     message: String,
-}
-
-/// Reads the response data from the secret call
-fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
-    let mut secret_bytes: Vec<u8> = Vec::new();
-
-    unsafe {
-        loop {
-            let mut buffer = [0u8; BUFFER_SIZE];
-            let mut read: usize = 0;
-            let raw_read = &mut read as *mut usize;
-
-            let read_res = gg_request_read(
-                req_to_read,
-                buffer.as_mut_ptr() as *mut c_void,
-                BUFFER_SIZE,
-                raw_read,
-            );
-            GGError::from_code(read_res)?;
-
-            if read > 0 {
-                secret_bytes.extend_from_slice(&buffer[..read]);
-            } else {
-                break;
-            }
-        }
-    }
-
-    Ok(secret_bytes)
 }
 
 /// Fetch the specified secrete from the green grass secret store

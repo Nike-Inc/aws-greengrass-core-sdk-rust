@@ -11,21 +11,6 @@ use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
 
-/// A macro that will close the request on error
-#[macro_export]
-macro_rules! try_clean {
-    ($req:expr, $expr:expr) => {
-        match $expr {
-            GGResult::Ok(val) => val,
-            GGResult::Err(err) => {
-                let close_res = gg_request_close($req);
-                GGError::from_code(close_res)?;
-                return Err(err);
-            }
-        }
-    };
-}
-
 /// Provices a wrapper for the various errors that are incurred both working with the
 /// GreenGrass C SDK directly or from the content of the results from it's responses (e.g. http status codes in json response objects)
 #[derive(Debug)]

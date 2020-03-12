@@ -1,13 +1,15 @@
 use crate::bindings::*;
 use crate::error::GGError;
-use crate::request::read_response_data;
+use crate::request::GGRequestResponse;
 use crate::GGResult;
+use crate::with_request;
 use serde::Deserialize;
 use std::convert::From;
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
+use std::convert::TryFrom;
 
 /// Handles requests to the SecretManager secrets
 /// that have been exposed to the green grass lambda
@@ -19,7 +21,7 @@ use std::ptr;
 ///     .with_secret_version(Some("version here".to_owned()))
 ///     .request();
 /// ```
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Secret {
     #[serde(rename = "ARN")]
@@ -85,52 +87,21 @@ impl SecretRequestBuilder {
 
     /// Executes the request and returns the secret
     pub fn request(&self) -> GGResult<Option<Secret>> {
-        let response = read_secret(self)?;
-        self.parse_response(&response)
-    }
-
-    fn parse_response(&self, response: &[u8]) -> GGResult<Option<Secret>> {
-        match serde_json::from_slice::<Secret>(response) {
-            Ok(secret) => Ok(Some(secret)),
-            Err(e) => {
-                // If parsing failed, see if we can parse it as an error response
-                match serde_json::from_slice::<ErrorResponse>(response) {
-                    Ok(er) => match er.status {
-                        404 => Ok(None),
-                        401 => Err(GGError::Unauthorized(format!(
-                            "Not Authorized to access secret key: {}",
-                            self.secret_id
-                        ))),
-                        _ => Err(GGError::Unknown(format!(
-                            "status: {} - message: {}",
-                            er.status, er.message
-                        ))),
-                    },
-                    Err(_) => {
-                        // Json parsing failed for another response, return wrapped version of the original error
-                        Err(GGError::from(e))
-                    }
-                }
-            }
+        if let Some(response) = read_secret(self)? {
+            Ok(Some(self.parse_response(&response)?))
+        } else {
+            Ok(None)
         }
     }
-}
 
-/// Used for parsing Error responses from the secret call
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ErrorResponse {
-    status: u16,
-    message: String,
+    fn parse_response(&self, response: &[u8]) -> GGResult<Secret> {
+        serde_json::from_slice::<Secret>(response).map_err(GGError::from)
+    }
 }
 
 /// Fetch the specified secrete from the green grass secret store
-fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Vec<u8>> {
+fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Option<Vec<u8>>> {
     unsafe {
-        let mut req: gg_request = ptr::null_mut();
-        let req_init = gg_request_init(&mut req);
-        GGError::from_code(req_init)?;
-
         let secret_name_c = CString::new(builder.secret_id.as_str()).map_err(GGError::from)?;
         let maybe_secret_version_c = if let Some(secret_version) = &builder.secret_version {
             Some(CString::new(secret_version.as_str()).map_err(GGError::from)?)
@@ -144,30 +115,27 @@ fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Vec<u8>> {
             None
         };
 
-        let mut res = gg_request_result {
-            request_status: gg_request_status_GG_REQUEST_SUCCESS,
-        };
+        let mut req: gg_request = ptr::null_mut();
+        with_request!(req, {
+            let mut res = gg_request_result {
+                request_status: gg_request_status_GG_REQUEST_SUCCESS,
+            };
 
-        let fetch_res = gg_get_secret_value(
-            req,
-            secret_name_c.as_ptr(),
-            maybe_secret_version_c
-                .map(|c| c.as_ptr())
-                .unwrap_or(ptr::null() as *const c_char),
-            maybe_secret_stage_c
-                .map(|c| c.as_ptr())
-                .unwrap_or(ptr::null() as *const c_char),
-            &mut res,
-        );
-
-        GGError::from_code(fetch_res)?;
-
-        let read_res = read_response_data(req);
-
-        let close_res = gg_request_close(req);
-        GGError::from_code(close_res)?;
-
-        read_res
+            let fetch_res = gg_get_secret_value(
+                req,
+                secret_name_c.as_ptr(),
+                maybe_secret_version_c
+                    .map(|c| c.as_ptr())
+                    .unwrap_or(ptr::null() as *const c_char),
+                maybe_secret_stage_c
+                    .map(|c| c.as_ptr())
+                    .unwrap_or(ptr::null() as *const c_char),
+                &mut res,
+            );
+            GGError::from_code(fetch_res)?;
+            let response = GGRequestResponse::try_from(&res)?;
+            response.read(req)
+        })
     }
 }
 
@@ -201,5 +169,39 @@ mod tests {
         assert_eq!(NAME, secret.name);
         assert_eq!(CREATION_DATE, secret.created_date);
         assert_eq!(version_stages(), secret.version_stages);
+    }
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_for_secret_id_request() {
+        reset_test_state();
+        let secret_id = "my_secret_id";
+        GG_REQUEST_READ_BUFFER.with(|rc| rc.replace(test_response().into_bytes()));
+        let secret = Secret::for_secret_id(secret_id).request().unwrap().unwrap();
+        let assert_secret_string = test_response();
+        assert_eq!(secret, serde_json::from_str::<Secret>(assert_secret_string.as_str()).unwrap());
+        GG_GET_SECRET_VALUE_ARGS.with(|rc| {
+            let borrowed = rc.borrow();
+            assert_eq!(borrowed.secret_id, secret_id);
+        });
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
+    }
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_for_secret_gg_error() {
+        let error = gg_error_GGE_INVALID_STATE;
+        GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(error));
+        let secret_id = "failed_secret_id";
+        let secret = Secret::for_secret_id(secret_id).request();
+        assert!(secret.is_err());
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
+        if let Err(GGError::InvalidState) = secret {
+            // don't fail
+        } else {
+            panic!("There should have been an Invalid Err");
+        }
     }
 }

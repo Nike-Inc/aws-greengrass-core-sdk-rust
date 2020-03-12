@@ -1,9 +1,11 @@
 use crate::bindings::*;
+use crate::GGResult;
 use crate::error::GGError;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::c_void;
+use log::error;
 
 /// The size of buffer we will use when reading results
 /// from the C API
@@ -61,6 +63,61 @@ impl GGRequestResponse {
     pub fn is_error(&self) -> bool {
         self.request_status != GGRequestStatus::Success
     }
+
+    /// Ok(()) if there is no error, otherwise the error we found
+    /// This is useful for requests that do not contain a body
+    pub(crate) fn to_error_result(&self, req: gg_request) -> GGResult<()> {
+        match self.determine_error(req) {
+            ErrorState::Error(e) => Err(e),
+            _ => Ok(()) // Ignore the NotFoundError too
+        }
+    }
+
+    /// Attempt to read the response body.
+    /// If the response is an error the error will be returned else the body in bytes.
+    /// This is useful for requests that contain a body
+    pub(crate) fn read(&self, req: gg_request) -> GGResult<Option<Vec<u8>>> {
+        match self.determine_error(req) {
+            ErrorState::None => {
+                let data = read_response_data(req)?;
+                Ok(Some(data))
+            }
+            ErrorState::NotFoundError => Ok(None),
+            ErrorState::Error(e) => Err(e)
+        }
+    }
+
+    /// If the response is an error, return it as Some(GGError)
+    /// None if it isn't an error
+    fn determine_error(&self, req: gg_request) -> ErrorState {
+        if self.is_error() {
+            // If this is an error than try to read the response body
+            // So we can see what kind of error it is
+            let read_result = read_response_data(req)
+                .and_then(|e| ErrorResponse::try_from(e.as_slice()));
+            match read_result {
+                Ok(err_resp) => {
+                    match err_resp.code {
+                        404 => ErrorState::NotFoundError,
+                        401 => ErrorState::Error(GGError::Unauthorized(err_resp.message)),
+                        _ => ErrorState::Error(GGError::ErrorResponse(self.clone()))
+                    }
+                }
+                Err(e) =>{
+                    error!("Error trying to read error response for response: {:?} error: {}", self, e);
+                    ErrorState::Error(e)
+                }
+            }
+        } else {
+            ErrorState::None
+        }
+    }
+}
+
+enum ErrorState {
+    Error(GGError),
+    NotFoundError,
+    None
 }
 
 impl Default for GGRequestResponse {
@@ -100,7 +157,7 @@ impl TryFrom<&[u8]> for ErrorResponse {
 }
 
 /// Reads the response data from the gg_request_reqd call
-pub(crate) fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
+fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
     let mut bytes: Vec<u8> = Vec::new();
 
     unsafe {
@@ -126,6 +183,22 @@ pub(crate) fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGE
     }
 
     Ok(bytes)
+}
+
+#[macro_export]
+macro_rules! with_request {
+    ($req:expr, $expr:block) => {{
+        let req_init = gg_request_init(&mut $req);
+        GGError::from_code(req_init)?;
+        let wrapper = move || {
+            //this will catch the return
+            $expr
+        };
+        let output = wrapper();
+        let close_res = gg_request_close($req);
+        GGError::from_code(close_res)?;
+        output
+    }};
 }
 
 #[cfg(test)]

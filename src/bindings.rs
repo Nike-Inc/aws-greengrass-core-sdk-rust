@@ -23,11 +23,45 @@ pub mod test {
     use std::ffi::CStr;
     use std::os::raw::c_void;
     use std::thread_local;
+    use uuid::Uuid;
 
-    #[derive(Debug, Copy, Clone)]
-    pub struct _gg_request {
-        _unused: [u8; 0],
+    // Thread locals used for testing
+    thread_local! {
+        pub static GG_SHADOW_THING_ARG: RefCell<String> = RefCell::new("".to_owned());
+        pub static GG_UPDATE_PAYLOAD: RefCell<String> = RefCell::new("".to_owned());
+        pub static GG_REQUEST_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
+        pub static GG_REQUEST: RefCell<_gg_request> = RefCell::new(_gg_request::default());
+        pub static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
+        /// used to store the arguments passed to gg_publish
+        pub static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
+        pub static GG_GET_SECRET_VALUE_ARGS: RefCell<GGGetSecretValueArgs> = RefCell::new(GGGetSecretValueArgs::default());
+        pub static GG_GET_SECRET_VALUE_RETURN: RefCell<gg_error> = RefCell::new(gg_error_GGE_SUCCESS);
+        pub static GG_CLOSE_REQUEST_COUNT: RefCell<u8> = RefCell::new(0);
     }
+
+    pub fn reset_test_state() {
+        GG_SHADOW_THING_ARG.with(|rc| rc.replace("".to_owned()));
+        GG_UPDATE_PAYLOAD.with(|rc| rc.replace("".to_owned()));
+        GG_REQUEST_READ_BUFFER.with(|rc| rc.replace(vec![]));
+        GG_REQUEST.with(|rc| rc.replace(_gg_request::default()));
+        GG_LAMBDA_HANDLER_READ_BUFFER.with(|rc| rc.replace(vec![]));
+        GG_PUBLISH_ARGS.with(|rc| rc.replace(GGPublishPayloadArgs::default()));
+        GG_GET_SECRET_VALUE_ARGS.with(|rc| rc.replace(GGGetSecretValueArgs::default()));
+        GG_CLOSE_REQUEST_COUNT.with(|rc| rc.replace(0));
+        GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(gg_error_GGE_SUCCESS));
+    }
+
+    #[derive(Debug, Copy, Clone, Default)]
+    pub struct _gg_request {
+        id: Option<Uuid>
+    }
+
+    impl _gg_request {
+        pub fn is_default(&self) -> bool {
+            self.id.is_none()
+        }
+    }
+
     pub type gg_request = *mut _gg_request;
     pub const gg_request_status_GG_REQUEST_SUCCESS: gg_request_status = 0;
     pub const gg_request_status_GG_REQUEST_HANDLED: gg_request_status = 1;
@@ -94,15 +128,25 @@ pub mod test {
     }
 
     pub extern "C" fn gg_request_init(ggreq: *mut gg_request) -> gg_error {
+        unsafe {
+            let req = _gg_request {
+                id: Some(Uuid::new_v4())
+            };
+            GG_REQUEST.with(|rc| {
+                rc.replace(req);
+                std::ptr::replace(ggreq, rc.as_ptr())
+            });
+        }
         gg_error_GGE_SUCCESS
     }
 
     pub extern "C" fn gg_request_close(ggreq: gg_request) -> gg_error {
-        gg_error_GGE_SUCCESS
-    }
+        GG_CLOSE_REQUEST_COUNT.with(|rc| {
+            let new_value = *rc.borrow() + 1;
+            rc.replace(new_value);
+        });
 
-    thread_local! {
-        pub static GG_REQUEST_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
+        gg_error_GGE_SUCCESS
     }
 
     pub extern "C" fn gg_request_read(
@@ -153,10 +197,6 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
-    thread_local! {
-        pub static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
-    }
-
     pub extern "C" fn gg_lambda_handler_read(
         buffer: *mut ::std::os::raw::c_void,
         buffer_size: usize,
@@ -204,6 +244,14 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
+    #[derive(Debug, Clone, Default)]
+    pub struct GGGetSecretValueArgs {
+        pub ggreq: _gg_request,
+        pub secret_id: String,
+        pub version_id: Option<String>,
+        pub version_stage: Option<String>,
+    }
+
     pub extern "C" fn gg_get_secret_value(
         ggreq: gg_request,
         secret_id: *const ::std::os::raw::c_char,
@@ -211,7 +259,29 @@ pub mod test {
         version_stage: *const ::std::os::raw::c_char,
         result: *mut gg_request_result,
     ) -> gg_error {
-        gg_error_GGE_SUCCESS
+        unsafe {
+            GG_GET_SECRET_VALUE_ARGS.with(|rc| {
+                let rust_version_id = if version_id.is_null() {
+                    None
+                } else {
+                    Some(CStr::from_ptr(version_id).to_owned().into_string().unwrap())
+                };
+
+                let rust_version_stage = if version_stage.is_null() {
+                    None
+                } else {
+                    Some(CStr::from_ptr(version_stage).to_owned().into_string().unwrap())
+                };
+                let args = GGGetSecretValueArgs {
+                    ggreq: ggreq.as_ref().unwrap().clone(),
+                    secret_id: CStr::from_ptr(secret_id).to_owned().into_string().unwrap(),
+                    version_id: rust_version_id,
+                    version_stage: rust_version_stage,
+                };
+                rc.replace(args);
+            });
+        }
+        GG_GET_SECRET_VALUE_RETURN.with(|rc| *rc.borrow())
     }
 
     pub const gg_invoke_type_GG_INVOKE_EVENT: gg_invoke_type = 0;
@@ -275,11 +345,6 @@ pub mod test {
         pub payload_size: usize,
     }
 
-    thread_local! {
-        /// used to store the arguments passed to gg_publish
-        pub static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
-    }
-
     pub extern "C" fn gg_publish(
         ggreq: gg_request,
         topic: *const ::std::os::raw::c_char,
@@ -304,11 +369,6 @@ pub mod test {
             });
         }
         gg_error_GGE_SUCCESS
-    }
-
-    thread_local! {
-        pub static GG_SHADOW_THING_ARG: RefCell<String> = RefCell::new("".to_owned());
-        pub static GG_UPDATE_PAYLOAD: RefCell<String> = RefCell::new("".to_owned());
     }
 
     //noinspection DuplicatedCode

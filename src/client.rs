@@ -1,19 +1,19 @@
 use log::info;
 use serde::ser::Serialize;
-use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
+use std::convert::TryFrom;
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
 
 use crate::bindings::*;
 use crate::error::GGError;
-use crate::request::{read_response_data, ErrorResponse, GGRequestResponse};
-use crate::try_clean;
+use crate::request::GGRequestResponse;
 use crate::GGResult;
+use crate::with_request;
 
 #[derive(Clone)]
 pub struct IOTDataClient {
@@ -45,36 +45,21 @@ impl IOTDataClient {
             let topic_c = CString::new(topic).map_err(GGError::from)?;
 
             let mut req: gg_request = ptr::null_mut();
-            let req_init = gg_request_init(&mut req);
-            GGError::from_code(req_init)?;
+            with_request!(req, {
+                let mut res = gg_request_result {
+                    request_status: gg_request_status_GG_REQUEST_SUCCESS,
+                };
 
-            let mut res = gg_request_result {
-                request_status: gg_request_status_GG_REQUEST_SUCCESS,
-            };
-
-            let pub_res = gg_publish(
-                req,
-                topic_c.as_ptr(),
-                buffer as *const _ as *const c_void,
-                read,
-                &mut res,
-            );
-            try_clean!(req, GGError::from_code(pub_res));
-
-            let response = try_clean!(req, GGRequestResponse::try_from(&res));
-            if response.is_error() {
-                let result = try_clean!(req, read_response_data(req));
-                let error_response = try_clean!(req, ErrorResponse::try_from(result.as_slice()));
-
-                let response_2 = response.with_error_response(Some(error_response));
-                let close_res = gg_request_close(req);
-                GGError::from_code(close_res)?;
-                Err(GGError::ErrorResponse(response_2))
-            } else {
-                let close_res = gg_request_close(req);
-                GGError::from_code(close_res)?;
-                Ok(())
-            }
+                let pub_res = gg_publish(
+                    req,
+                    topic_c.as_ptr(),
+                    buffer as *const _ as *const c_void,
+                    read,
+                    &mut res,
+                );
+                GGError::from_code(pub_res)?;
+                GGRequestResponse::try_from(&res)?.to_error_result(req)
+            })
         }
     }
 
@@ -193,6 +178,7 @@ mod test {
     #[cfg(not(feature = "mock"))]
     #[test]
     fn test_publish_raw() {
+        reset_test_state();
         let topic = "my_topic";
         let my_payload = b"This is my payload.";
         IOTDataClient::default()
@@ -203,6 +189,8 @@ mod test {
             assert_eq!(args.topic, topic);
             assert_eq!(args.payload, my_payload);
             assert_eq!(args.payload_size, my_payload.len());
-        })
+        });
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
     }
 }

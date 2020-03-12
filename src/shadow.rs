@@ -5,9 +5,9 @@ use std::ptr;
 
 use crate::bindings::*;
 use crate::error::GGError;
-use crate::request::{read_response_data, ErrorResponse, GGRequestResponse};
-use crate::try_clean;
+use crate::request::GGRequestResponse;
 use crate::GGResult;
+use crate::with_request;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::default::Default;
@@ -48,21 +48,11 @@ impl ShadowClient {
         &self,
         thing_name: &str,
     ) -> GGResult<Option<T>> {
-        let bytes = read_thing_shadow(thing_name)?;
-        // First check to see if the response contains an error
-        // This might be a bit inefficient, but I couldn't think of a better way to do it at the time
-        // as type T could just be Value or another type that would be successful in parsing, making the API inconsistent
-        if let Ok(err_response) = serde_json::from_slice::<ErrorResponse>(&bytes) {
-            match err_response.code {
-                404 => Ok(None),
-                _ => Err(GGError::Unknown(format!(
-                    "code: {}, message: {}",
-                    err_response.code, err_response.message
-                ))),
-            }
-        } else {
+        if let Some(bytes) = read_thing_shadow(thing_name)? {
             let json: T = serde_json::from_slice(&bytes).map_err(GGError::from)?;
             Ok(Some(json))
+        } else {
+            Ok(None)
         }
     }
 
@@ -89,39 +79,20 @@ impl ShadowClient {
         unsafe {
             let thing_name_c = CString::new(thing_name).map_err(GGError::from)?;
             let json_string_c = CString::new(json_string).map_err(GGError::from)?;
-
             let mut req: gg_request = ptr::null_mut();
-            let req_init = gg_request_init(&mut req);
-            GGError::from_code(req_init)?;
-
-            let mut res = gg_request_result {
-                request_status: gg_request_status_GG_REQUEST_SUCCESS,
-            };
-
-            let update_res = gg_update_thing_shadow(
-                req,
-                thing_name_c.as_ptr(),
-                json_string_c.as_ptr(),
-                &mut res,
-            );
-            try_clean!(req, GGError::from_code(update_res));
-
-            let response = try_clean!(req, GGRequestResponse::try_from(&res));
-            if response.is_error() {
-                let response_bytes = try_clean!(req, read_response_data(req));
-                let error_response =
-                    try_clean!(req, ErrorResponse::try_from(response_bytes.as_slice()));
-                let response_2 = response.with_error_response(Some(error_response));
-
-                let close_res = gg_request_close(req);
-                GGError::from_code(close_res)?;
-
-                Err(GGError::ErrorResponse(response_2))
-            } else {
-                let close_res = gg_request_close(req);
-                GGError::from_code(close_res)?;
-                Ok(())
-            }
+            with_request!(req, {
+                let mut res = gg_request_result {
+                    request_status: gg_request_status_GG_REQUEST_SUCCESS,
+                };
+                let update_res = gg_update_thing_shadow(
+                    req,
+                    thing_name_c.as_ptr(),
+                    json_string_c.as_ptr(),
+                    &mut res,
+                );
+                GGError::from_code(update_res)?;
+                GGRequestResponse::try_from(&res)?.to_error_result(req)
+            })
         }
     }
 
@@ -142,33 +113,16 @@ impl ShadowClient {
     #[cfg(not(all(test, feature = "mock")))]
     pub fn delete_thing_shadow(&self, thing_name: &str) -> GGResult<()> {
         unsafe {
-            let mut req: gg_request = ptr::null_mut();
-            let req_init = gg_request_init(&mut req);
-            GGError::from_code(req_init)?;
-
             let thing_name_c = CString::new(thing_name).map_err(GGError::from)?;
-
-            let mut res_c = gg_request_result {
-                request_status: gg_request_status_GG_REQUEST_SUCCESS,
-            };
-
-            let delete_res = gg_delete_thing_shadow(req, thing_name_c.as_ptr(), &mut res_c);
-            try_clean!(req, GGError::from_code(delete_res));
-
-            let response = try_clean!(req, GGRequestResponse::try_from(&res_c));
-            if response.is_error() {
-                let resp_bytes = try_clean!(req, read_response_data(req));
-                let err_resp = try_clean!(req, ErrorResponse::try_from(resp_bytes.as_slice()));
-                let response_2 = response.with_error_response(Some(err_resp));
-                let close_res = gg_request_close(req);
-                GGError::from_code(close_res)?;
-
-                Err(GGError::ErrorResponse(response_2))
-            } else {
-                let close_res = gg_request_close(req);
-                GGError::from_code(close_res)?;
-                Ok(())
-            }
+            let mut req: gg_request = ptr::null_mut();
+            with_request!(req, {
+                let mut res_c = gg_request_result {
+                    request_status: gg_request_status_GG_REQUEST_SUCCESS,
+                };
+                let delete_res = gg_delete_thing_shadow(req, thing_name_c.as_ptr(), &mut res_c);
+                GGError::from_code(delete_res)?;
+                GGRequestResponse::try_from(&res_c)?.to_error_result(req)
+            })
         }
     }
 
@@ -229,35 +183,18 @@ impl Default for ShadowClient {
     }
 }
 
-fn read_thing_shadow(thing_name: &str) -> GGResult<Vec<u8>> {
+fn read_thing_shadow(thing_name: &str) -> GGResult<Option<Vec<u8>>> {
     unsafe {
-        let mut req: gg_request = ptr::null_mut();
-        let req_init = gg_request_init(&mut req);
-        GGError::from_code(req_init)?;
-
         let thing_name_c = CString::new(thing_name).map_err(GGError::from)?;
-
-        let mut res = gg_request_result {
-            request_status: gg_request_status_GG_REQUEST_SUCCESS,
-        };
-
-        let fetch_res = gg_get_thing_shadow(req, thing_name_c.as_ptr(), &mut res);
-        try_clean!(req, GGError::from_code(fetch_res));
-
-        let converted_response = GGRequestResponse::try_from(&res)?;
-        if converted_response.is_error() {
-            let read_res = try_clean!(
-                req,
-                read_response_data(req).and_then(|bytes| ErrorResponse::try_from(bytes.as_slice()))
-            );
-            let response2 = converted_response.with_error_response(Some(read_res));
-            Err(GGError::ErrorResponse(response2))
-        } else {
-            let read_res = try_clean!(req, read_response_data(req));
-            let close_res = gg_request_close(req);
-            GGError::from_code(close_res)?;
-            Ok(read_res)
-        }
+        let mut req: gg_request = ptr::null_mut();
+        with_request!(req, {
+            let mut res = gg_request_result {
+                request_status: gg_request_status_GG_REQUEST_SUCCESS,
+            };
+            let fetch_res = gg_get_thing_shadow(req, thing_name_c.as_ptr(), &mut res);
+            GGError::from_code(fetch_res)?;
+            GGRequestResponse::try_from(&res)?.read(req)
+        })
     }
 }
 
@@ -359,6 +296,7 @@ pub mod test {
     #[cfg(not(feature = "mock"))]
     #[test]
     fn test_get_shadow_thing() {
+        reset_test_state();
         GG_REQUEST_READ_BUFFER.with(|rc| rc.replace(DEFAULT_SHADOW_DOC.as_bytes().to_vec()));
         let thing_name = "my_thing_get";
         let shadow = ShadowClient::default()
@@ -370,21 +308,27 @@ pub mod test {
             shadow,
             serde_json::from_str::<Value>(DEFAULT_SHADOW_DOC).unwrap()
         );
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
     }
 
     #[cfg(not(feature = "mock"))]
     #[test]
     fn test_delete_shadow_thing() {
+        reset_test_state();
         let thing_name = "my_thing_get_delete";
         ShadowClient::default()
             .delete_thing_shadow(thing_name)
             .unwrap();
         GG_SHADOW_THING_ARG.with(|rc| assert_eq!(*rc.borrow(), thing_name));
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
     }
 
     #[cfg(not(feature = "mock"))]
     #[test]
     fn test_update_shadow_thing() {
+        reset_test_state();
         let thing_name = "my_thing_update";
         let doc = serde_json::from_str::<Value>(DEFAULT_SHADOW_DOC).unwrap();
         ShadowClient::default()
@@ -394,5 +338,7 @@ pub mod test {
         GG_UPDATE_PAYLOAD.with(|rc| {
             assert_eq!(*rc.borrow(), serde_json::to_string(&doc).unwrap());
         });
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
     }
 }

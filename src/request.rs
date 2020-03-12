@@ -131,9 +131,9 @@ pub(crate) fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGE
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::ptr;
     use crate::bindings::*;
     use std::borrow::BorrowMut;
+    use std::ptr;
 
     const READ_DATA: &[u8] = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Malesuada fames ac turpis egestas maecenas pharetra. Ornare massa eget egestas purus viverra accumsan in nisl nisi. Dolor morbi non arcu risus. Vehicula ipsum a arcu cursus vitae. Luctus accumsan tortor posuere ac ut consequat semper viverra. At tempor commodo ullamcorper a lacus vestibulum sed. Dui ut ornare lectus sit amet. Tristique magna sit amet purus gravida quis blandit turpis. Duis at consectetur lorem donec. Amet cursus sit amet dictum sit. Lacus viverra vitae congue eu consequat ac felis donec et.
 
@@ -158,7 +158,7 @@ Parturient montes nascetur ridiculus mus mauris vitae ultricies. Suspendisse sed
     #[test]
     fn test_read_response_data() {
         unsafe {
-            GG_REQUEST_READ_BUFFER.with( |buffer| buffer.replace(READ_DATA.to_owned()));
+            GG_REQUEST_READ_BUFFER.with(|buffer| buffer.replace(READ_DATA.to_owned()));
             let mut req: gg_request = ptr::null_mut();
             let result = gg_request_init(&mut req);
             assert_eq!(result, gg_error_GGE_SUCCESS);
@@ -168,5 +168,4 @@ Parturient montes nascetur ridiculus mus mauris vitae ultricies. Suspendisse sed
             assert_eq!(result, READ_DATA);
         }
     }
-
 }

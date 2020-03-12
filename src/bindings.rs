@@ -8,10 +8,10 @@ pub use self::test::*;
 /// Useful for internal testing.
 #[cfg(test)]
 pub mod test {
-    use std::thread_local;
     use std::cell::RefCell;
-    use std::os::raw::{c_void, c_char};
     use std::ffi::{CStr, CString};
+    use std::os::raw::{c_char, c_void};
+    use std::thread_local;
 
     #[derive(Debug, Copy, Clone)]
     pub struct _gg_request {
@@ -42,10 +42,14 @@ pub mod test {
     pub const gg_error_GGE_RESERVED_PAD: gg_error = 2147483647;
     pub type gg_error = u32;
 
-    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_BEST_EFFORT: gg_queue_full_policy_options = 0;
-    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR: gg_queue_full_policy_options = 1;
-    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_MAX: gg_queue_full_policy_options = 2;
-    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_PAD: gg_queue_full_policy_options = 2147483647;
+    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_BEST_EFFORT:
+        gg_queue_full_policy_options = 0;
+    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR:
+        gg_queue_full_policy_options = 1;
+    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_MAX:
+        gg_queue_full_policy_options = 2;
+    pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_PAD:
+        gg_queue_full_policy_options = 2147483647;
 
     pub type gg_queue_full_policy_options = u32;
 
@@ -67,7 +71,6 @@ pub mod test {
 
     pub type gg_log_level = u32;
 
-
     pub fn gg_global_init(opt: u32) -> gg_error {
         gg_error_GGE_SUCCESS
     }
@@ -83,7 +86,6 @@ pub mod test {
     pub fn gg_request_close(ggreq: gg_request) -> gg_error {
         gg_error_GGE_SUCCESS
     }
-
 
     thread_local! {
         pub static GG_REQUEST_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
@@ -111,7 +113,10 @@ pub mod test {
                     // borrowed will now contain everything up to index
                     let next = borrowed.split_off(index);
                     println!("gg_request_read: writing buffer: {:?}", borrowed);
-                    buffer.copy_from_nonoverlapping(borrowed.as_ptr() as *const c_void, borrowed.len());
+                    buffer.copy_from_nonoverlapping(
+                        borrowed.as_ptr() as *const c_void,
+                        borrowed.len(),
+                    );
                     amount_read.write(borrowed.len());
                     // replace the refcell with the rest of the vec
                     b.replace(next);
@@ -126,10 +131,16 @@ pub mod test {
         pub function_arn: *const ::std::os::raw::c_char,
         pub client_context: *const ::std::os::raw::c_char,
     }
-    pub type gg_lambda_handler = ::std::option::Option<unsafe fn(cxt: *const gg_lambda_context)>;
+
+    pub type gg_lambda_handler =
+        ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
 
     pub fn gg_runtime_start(handler: gg_lambda_handler, opt: u32) -> gg_error {
         gg_error_GGE_SUCCESS
+    }
+
+    thread_local! {
+        pub static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
     }
 
     pub fn gg_lambda_handler_read(
@@ -137,6 +148,32 @@ pub mod test {
         buffer_size: usize,
         amount_read: *mut usize,
     ) -> gg_error {
+        unsafe {
+            GG_LAMBDA_HANDLER_READ_BUFFER.with(|b| {
+                let mut borrowed = b.borrow().clone();
+                // If the vector is empty, don't do anything and notify that we read zero bytes
+                if borrowed.is_empty() {
+                    amount_read.write(0);
+                } else {
+                    // Find the index to split the array off at
+                    let index = if buffer_size > borrowed.len() {
+                        borrowed.len()
+                    } else {
+                        buffer_size
+                    };
+                    // borrowed will now contain everything up to index
+                    let next = borrowed.split_off(index);
+                    println!("gg_lambda_handler_read: writing buffer: {:?}", borrowed);
+                    buffer.copy_from_nonoverlapping(
+                        borrowed.as_ptr() as *const c_void,
+                        borrowed.len(),
+                    );
+                    amount_read.write(borrowed.len());
+                    // replace the refcell with the rest of the vec
+                    b.replace(next);
+                }
+            });
+        }
         gg_error_GGE_SUCCESS
     }
 
@@ -219,7 +256,7 @@ pub mod test {
     pub struct GGPublishPayloadArgs {
         pub topic: String,
         pub payload: Vec<u8>,
-        pub payload_size: usize
+        pub payload_size: usize,
     }
 
     thread_local! {

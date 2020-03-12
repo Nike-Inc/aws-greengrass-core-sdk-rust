@@ -10,7 +10,8 @@ pub use self::test::*;
 pub mod test {
     use std::thread_local;
     use std::cell::RefCell;
-    use std::os::raw::c_void;
+    use std::os::raw::{c_void, c_char};
+    use std::ffi::{CStr, CString};
 
     #[derive(Debug, Copy, Clone)]
     pub struct _gg_request {
@@ -213,6 +214,19 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
+    /// Represents arguments passed to gg_publish
+    #[derive(Debug, Default, PartialEq)]
+    pub struct GGPublishPayloadArgs {
+        pub topic: String,
+        pub payload: Vec<u8>,
+        pub payload_size: usize
+    }
+
+    thread_local! {
+        /// used to store the arguments passed to gg_publish
+        pub static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
+    }
+
     pub fn gg_publish(
         ggreq: gg_request,
         topic: *const ::std::os::raw::c_char,
@@ -220,6 +234,22 @@ pub mod test {
         payload_size: usize,
         result: *mut gg_request_result,
     ) -> gg_error {
+        unsafe {
+            GG_PUBLISH_ARGS.with(|args| {
+                // read the void* payload pointer into a byte array
+                let mut dst = Vec::with_capacity(payload_size);
+                dst.set_len(payload_size);
+                std::ptr::copy(payload as *const u8, dst.as_mut_ptr(), payload_size);
+
+                let gg_args = GGPublishPayloadArgs {
+                    topic: CStr::from_ptr(topic).to_owned().into_string().unwrap(),
+                    payload: dst,
+                    payload_size,
+                };
+
+                args.replace(gg_args);
+            });
+        }
         gg_error_GGE_SUCCESS
     }
 

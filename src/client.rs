@@ -185,3 +185,22 @@ pub mod mock {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_publish_raw() {
+        let topic = "my_topic";
+        let my_payload = b"This is my payload.";
+        IOTDataClient::default().publish_raw(topic, my_payload, my_payload.len()).unwrap();
+        GG_PUBLISH_ARGS.with(|ref_cell| {
+            let args = ref_cell.borrow();
+            assert_eq!(args.topic, topic);
+            assert_eq!(args.payload, my_payload);
+            assert_eq!(args.payload_size, my_payload.len());
+        })
+    }
+
+}

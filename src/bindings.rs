@@ -1,3 +1,14 @@
+#![allow(dead_code, improper_ctypes, unused_variables, non_upper_case_globals, non_camel_case_types, non_snake_case)]
+//! This module encapsulates the bindings for the C library
+//! The bindings are regenerated on build on every build.
+//! For testing we do two things
+//!
+//! 1. Use a mocked version with test hooks for the rest of the project
+//! 2. Add another module so the tests against the generated bindings is still run
+//!
+//! improper c_types is ignored. This is do to the u128 issue described here: https://github.com/rust-lang/rust-bindgen/issues/1549
+//! dead_code is allowed, do to a number of things in the bindings not being used
+
 #[cfg(not(test))]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -9,8 +20,8 @@ pub use self::test::*;
 #[cfg(test)]
 pub mod test {
     use std::cell::RefCell;
-    use std::ffi::{CStr, CString};
-    use std::os::raw::{c_char, c_void};
+    use std::ffi::CStr;
+    use std::os::raw::c_void;
     use std::thread_local;
 
     #[derive(Debug, Copy, Clone)]
@@ -71,19 +82,22 @@ pub mod test {
 
     pub type gg_log_level = u32;
 
-    pub fn gg_global_init(opt: u32) -> gg_error {
+    pub extern "C" fn gg_global_init(opt: u32) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_log(level: gg_log_level, format: *const ::std::os::raw::c_char) -> gg_error {
+    pub extern "C" fn gg_log(
+        level: gg_log_level,
+        format: *const ::std::os::raw::c_char,
+    ) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_request_init(ggreq: *mut gg_request) -> gg_error {
+    pub extern "C" fn gg_request_init(ggreq: *mut gg_request) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_request_close(ggreq: gg_request) -> gg_error {
+    pub extern "C" fn gg_request_close(ggreq: gg_request) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
@@ -91,7 +105,7 @@ pub mod test {
         pub static GG_REQUEST_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
     }
 
-    pub fn gg_request_read(
+    pub extern "C" fn gg_request_read(
         ggreq: gg_request,
         buffer: *mut ::std::os::raw::c_void,
         buffer_size: usize,
@@ -135,7 +149,7 @@ pub mod test {
     pub type gg_lambda_handler =
         ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
 
-    pub fn gg_runtime_start(handler: gg_lambda_handler, opt: u32) -> gg_error {
+    pub extern "C" fn gg_runtime_start(handler: gg_lambda_handler, opt: u32) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
@@ -143,7 +157,7 @@ pub mod test {
         pub static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
     }
 
-    pub fn gg_lambda_handler_read(
+    pub extern "C" fn gg_lambda_handler_read(
         buffer: *mut ::std::os::raw::c_void,
         buffer_size: usize,
         amount_read: *mut usize,
@@ -177,18 +191,20 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_lambda_handler_write_response(
+    pub extern "C" fn gg_lambda_handler_write_response(
         response: *const ::std::os::raw::c_void,
         response_size: usize,
     ) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_lambda_handler_write_error(error_message: *const ::std::os::raw::c_char) -> gg_error {
+    pub extern "C" fn gg_lambda_handler_write_error(
+        error_message: *const ::std::os::raw::c_char,
+    ) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_get_secret_value(
+    pub extern "C" fn gg_get_secret_value(
         ggreq: gg_request,
         secret_id: *const ::std::os::raw::c_char,
         version_id: *const ::std::os::raw::c_char,
@@ -217,7 +233,7 @@ pub mod test {
         pub payload_size: usize,
     }
 
-    pub fn gg_invoke(
+    pub extern "C" fn gg_invoke(
         ggreq: gg_request,
         opts: *const gg_invoke_options,
         result: *mut gg_request_result,
@@ -225,22 +241,22 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_publish_options_init(opts: *mut gg_publish_options) -> gg_error {
+    pub extern "C" fn gg_publish_options_init(opts: *mut gg_publish_options) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_publish_options_free(opts: gg_publish_options) -> gg_error {
+    pub extern "C" fn gg_publish_options_free(opts: gg_publish_options) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_publish_options_set_queue_full_policy(
+    pub extern "C" fn gg_publish_options_set_queue_full_policy(
         opts: gg_publish_options,
         policy: gg_queue_full_policy_options,
     ) -> gg_error {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_publish_with_options(
+    pub extern "C" fn gg_publish_with_options(
         ggreq: gg_request,
         topic: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_void,
@@ -264,7 +280,7 @@ pub mod test {
         pub static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
     }
 
-    pub fn gg_publish(
+    pub extern "C" fn gg_publish(
         ggreq: gg_request,
         topic: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_void,
@@ -290,28 +306,66 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_get_thing_shadow(
+    thread_local! {
+        pub static GG_SHADOW_THING_ARG: RefCell<String> = RefCell::new("".to_owned());
+        pub static GG_UPDATE_PAYLOAD: RefCell<String> = RefCell::new("".to_owned());
+    }
+
+    //noinspection DuplicatedCode
+    pub extern "C" fn gg_get_thing_shadow(
         ggreq: gg_request,
         thing_name: *const ::std::os::raw::c_char,
         result: *mut gg_request_result,
     ) -> gg_error {
+        unsafe {
+            GG_SHADOW_THING_ARG.with(|rc| {
+                let thing_name_rust = CStr::from_ptr(thing_name).to_owned().into_string().unwrap();
+                rc.replace(thing_name_rust);
+            });
+        }
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_update_thing_shadow(
+    pub extern "C" fn gg_update_thing_shadow(
         ggreq: gg_request,
         thing_name: *const ::std::os::raw::c_char,
         update_payload: *const ::std::os::raw::c_char,
         result: *mut gg_request_result,
     ) -> gg_error {
+        unsafe {
+            GG_UPDATE_PAYLOAD.with(|rc| {
+                let payload = CStr::from_ptr(update_payload)
+                    .to_owned()
+                    .into_string()
+                    .unwrap();
+                rc.replace(payload);
+            });
+            GG_SHADOW_THING_ARG.with(|rc| {
+                let thing_name_rust = CStr::from_ptr(thing_name).to_owned().into_string().unwrap();
+                rc.replace(thing_name_rust);
+            });
+        }
         gg_error_GGE_SUCCESS
     }
 
-    pub fn gg_delete_thing_shadow(
+    //noinspection DuplicatedCode
+    pub extern "C" fn gg_delete_thing_shadow(
         ggreq: gg_request,
         thing_name: *const ::std::os::raw::c_char,
-        result: *mut gg_request_result,
+        _result: *mut gg_request_result,
     ) -> gg_error {
+        unsafe {
+            GG_SHADOW_THING_ARG.with(|rc| {
+                let thing_name_rust = CStr::from_ptr(thing_name).to_owned().into_string().unwrap();
+                rc.replace(thing_name_rust);
+            });
+        }
         gg_error_GGE_SUCCESS
     }
+}
+
+#[cfg(test)]
+mod bindings_test {
+    // This is to make sure binding tests are still run
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }

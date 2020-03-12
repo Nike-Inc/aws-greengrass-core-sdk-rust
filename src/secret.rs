@@ -3,10 +3,10 @@ use crate::error::GGError;
 use crate::request::read_response_data;
 use crate::GGResult;
 use serde::Deserialize;
-use std::convert::{AsRef, From};
+use std::convert::From;
 use std::default::Default;
 use std::ffi::CString;
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_char;
 use std::ptr;
 
 /// Handles requests to the SecretManager secrets

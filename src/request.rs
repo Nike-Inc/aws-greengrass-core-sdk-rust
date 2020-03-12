@@ -1,6 +1,5 @@
 use crate::bindings::*;
 use crate::error::GGError;
-use crate::GGResult;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::default::Default;
@@ -29,6 +28,7 @@ pub enum GGRequestStatus {
 impl TryFrom<&gg_request_status> for GGRequestStatus {
     type Error = GGError;
 
+    #[allow(non_upper_case_globals)]
     fn try_from(value: &gg_request_status) -> Result<Self, Self::Error> {
         match value {
             &gg_request_status_GG_REQUEST_SUCCESS => Ok(Self::Success),
@@ -131,8 +131,6 @@ pub(crate) fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGE
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bindings::*;
-    use std::borrow::BorrowMut;
     use std::ptr;
 
     const READ_DATA: &[u8] = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Malesuada fames ac turpis egestas maecenas pharetra. Ornare massa eget egestas purus viverra accumsan in nisl nisi. Dolor morbi non arcu risus. Vehicula ipsum a arcu cursus vitae. Luctus accumsan tortor posuere ac ut consequat semper viverra. At tempor commodo ullamcorper a lacus vestibulum sed. Dui ut ornare lectus sit amet. Tristique magna sit amet purus gravida quis blandit turpis. Duis at consectetur lorem donec. Amet cursus sit amet dictum sit. Lacus viverra vitae congue eu consequat ac felis donec et.
@@ -157,15 +155,13 @@ Parturient montes nascetur ridiculus mus mauris vitae ultricies. Suspendisse sed
 
     #[test]
     fn test_read_response_data() {
-        unsafe {
-            GG_REQUEST_READ_BUFFER.with(|buffer| buffer.replace(READ_DATA.to_owned()));
-            let mut req: gg_request = ptr::null_mut();
-            let result = gg_request_init(&mut req);
-            assert_eq!(result, gg_error_GGE_SUCCESS);
+        GG_REQUEST_READ_BUFFER.with(|buffer| buffer.replace(READ_DATA.to_owned()));
+        let mut req: gg_request = ptr::null_mut();
+        let result = gg_request_init(&mut req);
+        assert_eq!(result, gg_error_GGE_SUCCESS);
 
-            let result = read_response_data(req).unwrap();
-            assert!(!result.is_empty());
-            assert_eq!(result, READ_DATA);
-        }
+        let result = read_response_data(req).unwrap();
+        assert!(!result.is_empty());
+        assert_eq!(result, READ_DATA);
     }
 }

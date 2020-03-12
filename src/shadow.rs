@@ -1,4 +1,4 @@
-use serde_json::{self, Value};
+use serde_json;
 use std::convert::TryFrom;
 use std::ffi::CString;
 use std::ptr;
@@ -9,12 +9,11 @@ use crate::request::{read_response_data, ErrorResponse, GGRequestResponse};
 use crate::try_clean;
 use crate::GGResult;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::default::Default;
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
-use std::borrow::BorrowMut;
 
 /// Provides the ability to interfact with a Thing's (Device) Shadow document
 ///
@@ -49,7 +48,7 @@ impl ShadowClient {
         &self,
         thing_name: &str,
     ) -> GGResult<Option<T>> {
-        let (bytes, response) = read_thing_shadow(thing_name)?;
+        let bytes = read_thing_shadow(thing_name)?;
         // First check to see if the response contains an error
         // This might be a bit inefficient, but I couldn't think of a better way to do it at the time
         // as type T could just be Value or another type that would be successful in parsing, making the API inconsistent
@@ -189,7 +188,7 @@ impl ShadowClient {
         if let Some(output) = self.mocks.get_shadow_thing_outputs.borrow_mut().pop() {
             output.map(|o| serde_json::from_slice::<T>(o.as_slice()).ok())
         } else {
-            Ok(serde_json::from_str(DEFAULT_SHADOW_DOC).ok())
+            Ok(serde_json::from_str(self::test::DEFAULT_SHADOW_DOC).ok())
         }
     }
 
@@ -230,7 +229,7 @@ impl Default for ShadowClient {
     }
 }
 
-fn read_thing_shadow(thing_name: &str) -> GGResult<(Vec<u8>, GGRequestResponse)> {
+fn read_thing_shadow(thing_name: &str) -> GGResult<Vec<u8>> {
     unsafe {
         let mut req: gg_request = ptr::null_mut();
         let req_init = gg_request_init(&mut req);
@@ -243,15 +242,22 @@ fn read_thing_shadow(thing_name: &str) -> GGResult<(Vec<u8>, GGRequestResponse)>
         };
 
         let fetch_res = gg_get_thing_shadow(req, thing_name_c.as_ptr(), &mut res);
-        GGError::from_code(fetch_res)?;
-
-        let read_res = read_response_data(req);
-
-        let close_res = gg_request_close(req);
-        GGError::from_code(close_res)?;
+        try_clean!(req, GGError::from_code(fetch_res));
 
         let converted_response = GGRequestResponse::try_from(&res)?;
-        read_res.map(|res| (res, converted_response))
+        if converted_response.is_error() {
+            let read_res = try_clean!(
+                req,
+                read_response_data(req).and_then(|bytes| ErrorResponse::try_from(bytes.as_slice()))
+            );
+            let response2 = converted_response.with_error_response(Some(read_res));
+            Err(GGError::ErrorResponse(response2))
+        } else {
+            let read_res = try_clean!(req, read_response_data(req));
+            let close_res = gg_request_close(req);
+            GGError::from_code(close_res)?;
+            Ok(read_res)
+        }
     }
 }
 
@@ -260,36 +266,6 @@ pub mod mock {
     use crate::GGResult;
     use serde::Serialize;
     use std::cell::RefCell;
-
-    pub const DEFAULT_SHADOW_DOC: &'static str = r#"{
-    "state" : {
-        "desired" : {
-          "color" : "RED",
-          "sequence" : [ "RED", "GREEN", "BLUE" ]
-        },
-        "reported" : {
-          "color" : "GREEN"
-        }
-    },
-    "metadata" : {
-        "desired" : {
-            "color" : {
-                "timestamp" : 12345
-            },
-            "sequence" : {
-                "timestamp" : 12345
-            }
-        },
-        "reported" : {
-            "color" : {
-                "timestamp" : 12345
-            }
-        }
-    },
-    "version" : 10,
-    "clientToken" : "UniqueClientToken",
-    "timestamp": 123456789
-}"#;
 
     #[derive(Debug, Clone)]
     pub struct GetShadowThingInput(pub String);
@@ -343,4 +319,80 @@ pub mod mock {
     // could result in undefined behavior
     unsafe impl Send for MockHolder {}
     unsafe impl Sync for MockHolder {}
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use serde_json::Value;
+
+    pub const DEFAULT_SHADOW_DOC: &'static str = r#"{
+    "state" : {
+        "desired" : {
+          "color" : "RED",
+          "sequence" : [ "RED", "GREEN", "BLUE" ]
+        },
+        "reported" : {
+          "color" : "GREEN"
+        }
+    },
+    "metadata" : {
+        "desired" : {
+            "color" : {
+                "timestamp" : 12345
+            },
+            "sequence" : {
+                "timestamp" : 12345
+            }
+        },
+        "reported" : {
+            "color" : {
+                "timestamp" : 12345
+            }
+        }
+    },
+    "version" : 10,
+    "clientToken" : "UniqueClientToken",
+    "timestamp": 123456789
+}"#;
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_get_shadow_thing() {
+        GG_REQUEST_READ_BUFFER.with(|rc| rc.replace(DEFAULT_SHADOW_DOC.as_bytes().to_vec()));
+        let thing_name = "my_thing_get";
+        let shadow = ShadowClient::default()
+            .get_thing_shadow::<Value>(thing_name)
+            .unwrap()
+            .unwrap();
+        GG_SHADOW_THING_ARG.with(|rc| assert_eq!(*rc.borrow(), thing_name));
+        assert_eq!(
+            shadow,
+            serde_json::from_str::<Value>(DEFAULT_SHADOW_DOC).unwrap()
+        );
+    }
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_delete_shadow_thing() {
+        let thing_name = "my_thing_get_delete";
+        ShadowClient::default()
+            .delete_thing_shadow(thing_name)
+            .unwrap();
+        GG_SHADOW_THING_ARG.with(|rc| assert_eq!(*rc.borrow(), thing_name));
+    }
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_update_shadow_thing() {
+        let thing_name = "my_thing_update";
+        let doc = serde_json::from_str::<Value>(DEFAULT_SHADOW_DOC).unwrap();
+        ShadowClient::default()
+            .update_thing_shadow(thing_name, &doc)
+            .unwrap();
+        GG_SHADOW_THING_ARG.with(|rc| assert_eq!(*rc.borrow(), thing_name));
+        GG_UPDATE_PAYLOAD.with(|rc| {
+            assert_eq!(*rc.borrow(), serde_json::to_string(&doc).unwrap());
+        });
+    }
 }

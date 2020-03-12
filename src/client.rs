@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::info;
 use serde::ser::Serialize;
 use std::convert::TryFrom;
 use std::default::Default;
@@ -84,7 +84,7 @@ impl IOTDataClient {
 
     #[cfg(all(test, feature = "mock"))]
     pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
-        warn!("Mock publish_raw is being executed!!! This should not happen in prod!!!!");
+        log::warn!("Mock publish_raw is being executed!!! This should not happen in prod!!!!");
         self.mocks
             .publish_raw_inputs
             .borrow_mut()
@@ -190,6 +190,7 @@ pub mod mock {
 mod test {
     use super::*;
 
+    #[cfg(not(feature = "mock"))]
     #[test]
     fn test_publish_raw() {
         let topic = "my_topic";

@@ -1,7 +1,6 @@
 use crate::bindings::*;
 use crate::handler::LambdaContext;
 use crate::request::GGRequestResponse;
-use crate::GGResult;
 use crossbeam_channel::{RecvError, SendError};
 use serde_json::Error as SerdeError;
 use std::convert::From;
@@ -64,6 +63,7 @@ pub enum GGError {
 impl GGError {
     /// Returns the green grass error as a result.
     /// Success code will be Ok(())
+    #[allow(non_upper_case_globals)]
     pub fn from_code(err_code: gg_error) -> Result<(), GGError> {
         match err_code {
             gg_error_GGE_SUCCESS => Ok(()),

@@ -14,11 +14,7 @@
 //!     Ok(())
 //! }
 //! ```
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+#![allow(unused_unsafe)] // because the test bindings will complain otherwise
 
 mod bindings;
 pub mod client;
@@ -30,6 +26,7 @@ pub mod runtime;
 pub mod secret;
 pub mod shadow;
 
+use crate::bindings::gg_global_init;
 use crate::error::GGError;
 use crate::runtime::Runtime;
 use std::default::Default;

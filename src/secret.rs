@@ -1,15 +1,15 @@
 use crate::bindings::*;
 use crate::error::GGError;
 use crate::request::GGRequestResponse;
-use crate::GGResult;
 use crate::with_request;
+use crate::GGResult;
 use serde::Deserialize;
 use std::convert::From;
+use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
-use std::convert::TryFrom;
 
 /// Handles requests to the SecretManager secrets
 /// that have been exposed to the green grass lambda
@@ -179,7 +179,10 @@ mod tests {
         GG_REQUEST_READ_BUFFER.with(|rc| rc.replace(test_response().into_bytes()));
         let secret = Secret::for_secret_id(secret_id).request().unwrap().unwrap();
         let assert_secret_string = test_response();
-        assert_eq!(secret, serde_json::from_str::<Secret>(assert_secret_string.as_str()).unwrap());
+        assert_eq!(
+            secret,
+            serde_json::from_str::<Secret>(assert_secret_string.as_str()).unwrap()
+        );
         GG_GET_SECRET_VALUE_ARGS.with(|rc| {
             let borrowed = rc.borrow();
             assert_eq!(borrowed.secret_id, secret_id);

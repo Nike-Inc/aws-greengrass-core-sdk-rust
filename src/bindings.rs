@@ -53,7 +53,7 @@ pub mod test {
 
     #[derive(Debug, Copy, Clone, Default)]
     pub struct _gg_request {
-        id: Option<Uuid>
+        id: Option<Uuid>,
     }
 
     impl _gg_request {
@@ -130,7 +130,7 @@ pub mod test {
     pub extern "C" fn gg_request_init(ggreq: *mut gg_request) -> gg_error {
         unsafe {
             let req = _gg_request {
-                id: Some(Uuid::new_v4())
+                id: Some(Uuid::new_v4()),
             };
             GG_REQUEST.with(|rc| {
                 rc.replace(req);
@@ -270,7 +270,12 @@ pub mod test {
                 let rust_version_stage = if version_stage.is_null() {
                     None
                 } else {
-                    Some(CStr::from_ptr(version_stage).to_owned().into_string().unwrap())
+                    Some(
+                        CStr::from_ptr(version_stage)
+                            .to_owned()
+                            .into_string()
+                            .unwrap(),
+                    )
                 };
                 let args = GGGetSecretValueArgs {
                     ggreq: ggreq.as_ref().unwrap().clone(),

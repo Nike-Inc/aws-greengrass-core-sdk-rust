@@ -1,10 +1,10 @@
 use log::info;
 use serde::ser::Serialize;
+use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use std::convert::TryFrom;
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
@@ -12,8 +12,8 @@ use self::mock::*;
 use crate::bindings::*;
 use crate::error::GGError;
 use crate::request::GGRequestResponse;
-use crate::GGResult;
 use crate::with_request;
+use crate::GGResult;
 
 #[derive(Clone)]
 pub struct IOTDataClient {

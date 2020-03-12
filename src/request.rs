@@ -1,11 +1,11 @@
 use crate::bindings::*;
-use crate::GGResult;
 use crate::error::GGError;
+use crate::GGResult;
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::default::Default;
 use std::ffi::c_void;
-use log::error;
 
 /// The size of buffer we will use when reading results
 /// from the C API
@@ -69,7 +69,7 @@ impl GGRequestResponse {
     pub(crate) fn to_error_result(&self, req: gg_request) -> GGResult<()> {
         match self.determine_error(req) {
             ErrorState::Error(e) => Err(e),
-            _ => Ok(()) // Ignore the NotFoundError too
+            _ => Ok(()), // Ignore the NotFoundError too
         }
     }
 
@@ -83,7 +83,7 @@ impl GGRequestResponse {
                 Ok(Some(data))
             }
             ErrorState::NotFoundError => Ok(None),
-            ErrorState::Error(e) => Err(e)
+            ErrorState::Error(e) => Err(e),
         }
     }
 
@@ -93,18 +93,19 @@ impl GGRequestResponse {
         if self.is_error() {
             // If this is an error than try to read the response body
             // So we can see what kind of error it is
-            let read_result = read_response_data(req)
-                .and_then(|e| ErrorResponse::try_from(e.as_slice()));
+            let read_result =
+                read_response_data(req).and_then(|e| ErrorResponse::try_from(e.as_slice()));
             match read_result {
-                Ok(err_resp) => {
-                    match err_resp.code {
-                        404 => ErrorState::NotFoundError,
-                        401 => ErrorState::Error(GGError::Unauthorized(err_resp.message)),
-                        _ => ErrorState::Error(GGError::ErrorResponse(self.clone()))
-                    }
-                }
-                Err(e) =>{
-                    error!("Error trying to read error response for response: {:?} error: {}", self, e);
+                Ok(err_resp) => match err_resp.code {
+                    404 => ErrorState::NotFoundError,
+                    401 => ErrorState::Error(GGError::Unauthorized(err_resp.message)),
+                    _ => ErrorState::Error(GGError::ErrorResponse(self.clone())),
+                },
+                Err(e) => {
+                    error!(
+                        "Error trying to read error response for response: {:?} error: {}",
+                        self, e
+                    );
                     ErrorState::Error(e)
                 }
             }
@@ -117,7 +118,7 @@ impl GGRequestResponse {
 enum ErrorState {
     Error(GGError),
     NotFoundError,
-    None
+    None,
 }
 
 impl Default for GGRequestResponse {

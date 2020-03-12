@@ -10,7 +10,6 @@ Provides an idiomatic Rust API around the [AWS Greengrass Core C SDK](https://gi
 ## Not yet Supported functionality that is available in the C SDK
 * Publishing with options
 * Changing queue full policies
-* Thing Shadow support
 * Lambda invocation
 
 ## Examples

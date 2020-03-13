@@ -24,6 +24,9 @@ lazy_static! {
 
 /// Type of runtime. Currently only one, Async exits
 pub enum RuntimeOption {
+    /// The runtime will be started in the current thread an block preventing exit
+    Sync,
+    /// The runtime will start in a new thread. If main() exits, the runtime stops`
     Async,
 }
 
@@ -31,6 +34,7 @@ impl RuntimeOption {
     /// Converts to the option required by the runtime api
     fn as_opt(&self) -> gg_runtime_opt {
         match self {
+            Self::Sync => 0, // for some reason they don't spell out this option in the header
             Self::Async => gg_runtime_opt_GG_RT_OPT_ASYNC,
         }
     }

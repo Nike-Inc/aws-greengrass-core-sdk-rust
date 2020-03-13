@@ -1,8 +1,6 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
-use log::{self, Level, LevelFilter, Log, Metadata, Record};
-
+use crate::bindings::*;
 use lazy_static::lazy_static;
+use log::{self, Level, LevelFilter, Log, Metadata, Record};
 use std::ffi::CString;
 
 lazy_static! {

@@ -1,7 +1,6 @@
 use crate::bindings::*;
 use crate::handler::LambdaContext;
 use crate::request::GGRequestResponse;
-use crate::GGResult;
 use crossbeam_channel::{RecvError, SendError};
 use serde_json::Error as SerdeError;
 use std::convert::From;
@@ -11,21 +10,6 @@ use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
-
-/// A macro that will close the request on error
-#[macro_export]
-macro_rules! try_clean {
-    ($req:expr, $expr:expr) => {
-        match $expr {
-            GGResult::Ok(val) => val,
-            GGResult::Err(err) => {
-                let close_res = gg_request_close($req);
-                GGError::from_code(close_res)?;
-                return Err(err);
-            }
-        }
-    };
-}
 
 /// Provices a wrapper for the various errors that are incurred both working with the
 /// GreenGrass C SDK directly or from the content of the results from it's responses (e.g. http status codes in json response objects)
@@ -64,6 +48,7 @@ pub enum GGError {
 impl GGError {
     /// Returns the green grass error as a result.
     /// Success code will be Ok(())
+    #[allow(non_upper_case_globals)]
     pub fn from_code(err_code: gg_error) -> Result<(), GGError> {
         match err_code {
             gg_error_GGE_SUCCESS => Ok(()),

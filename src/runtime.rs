@@ -1,5 +1,4 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
+use crate::bindings::*;
 use crate::error::GGError;
 use crate::handler::{Handler, LambdaContext};
 use crate::GGResult;
@@ -187,5 +186,36 @@ impl ChannelHolder {
     /// Performs a recv with CHANNEL and coerces the error type
     fn recv() -> GGResult<LambdaContext> {
         Arc::clone(&CHANNEL).receiver.recv().map_err(GGError::from)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_build_context() {
+        unsafe {
+            let my_message = b"My handlers message";
+            GG_LAMBDA_HANDLER_READ_BUFFER.with(|b| b.replace(my_message.to_owned().to_vec()));
+
+            let my_function_arn = "this is a function arn";
+            let client_ctx = "this is my client context";
+
+            let my_function_arn_c = CString::new(my_function_arn).unwrap();
+            let client_ctx_c = CString::new(client_ctx).unwrap();
+
+            let lambda_context_c = Box::new(gg_lambda_context {
+                function_arn: my_function_arn_c.as_ptr(),
+                client_context: client_ctx_c.as_ptr(),
+            });
+
+            let context = build_context(Box::into_raw(lambda_context_c)).unwrap();
+
+            assert_eq!(context.function_arn, my_function_arn);
+            assert_eq!(context.client_context, client_ctx);
+            assert_eq!(context.message, my_message);
+        }
     }
 }

@@ -44,10 +44,7 @@ impl ShadowClient {
     /// }
     /// ```
     #[cfg(not(all(test, feature = "mock")))]
-    pub fn get_thing_shadow<'a, T: DeserializeOwned>(
-        &self,
-        thing_name: &str,
-    ) -> GGResult<Option<T>> {
+    pub fn get_thing_shadow<T: DeserializeOwned>(&self, thing_name: &str) -> GGResult<Option<T>> {
         if let Some(bytes) = read_thing_shadow(thing_name)? {
             let json: T = serde_json::from_slice(&bytes).map_err(GGError::from)?;
             Ok(Some(json))

@@ -1,3 +1,41 @@
+//! An on-demand lambda function that will manipulate a specified thing's shadow document.
+//! This lambda will listen on an MQTT topic for a json command body. The following actions can be performed:
+//!
+//! # Get Shadow Document
+//! This will acquire a shadow document for a specified device and send it back to a specified MQTT Topic
+//!
+//! ## Example Payload:
+//! ```json
+//! {
+//!     "command": "GET",
+//!     "thing_name": "myThingName"
+//! }```
+//!
+//! # Delete Shadow Document
+//! Delete the shadow document for a specified device
+//!
+//! ## Example Payload
+//! ```json
+//! {
+//!     "command": "DELETE",
+//!     "thing_name": "myThingName"
+//! }```
+//!
+//! # Update Shadow Document
+//! Update the shadow document for a specified device
+//! ```json
+//! {
+//!     "command": "UPDATE".
+//!     "thing_name": "myThingName",
+//!     "document": {
+//!         "state" : {
+//!             "desired" : {
+//!                 "color" : "RED",
+//!                 "sequence" : [ "RED", "GREEN", "BLUE" ]
+//!             }
+//!         }
+//!     }
+//! }```
 use aws_greengrass_core_rust::client::IOTDataClient;
 use aws_greengrass_core_rust::error::GGError;
 use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
@@ -11,7 +49,7 @@ use std::default::Default;
 
 use log::{error, info, LevelFilter};
 
-const DEFAULT_SEND_TOPIC: &'static str = "/shadow-example/device-sent";
+const DEFAULT_SEND_TOPIC: &str = "/shadow-example/device-sent";
 
 struct ShadowHandler {
     iot_data_client: IOTDataClient,

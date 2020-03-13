@@ -32,12 +32,12 @@ impl TryFrom<&gg_request_status> for GGRequestStatus {
 
     #[allow(non_upper_case_globals)]
     fn try_from(value: &gg_request_status) -> Result<Self, Self::Error> {
-        match value {
-            &gg_request_status_GG_REQUEST_SUCCESS => Ok(Self::Success),
-            &gg_request_status_GG_REQUEST_HANDLED => Ok(Self::Handled),
-            &gg_request_status_GG_REQUEST_UNHANDLED => Ok(Self::Unhandled),
-            &gg_request_status_GG_REQUEST_UNKNOWN => Ok(Self::Unknown),
-            &gg_request_status_GG_REQUEST_AGAIN => Ok(Self::Again),
+        match *value {
+            gg_request_status_GG_REQUEST_SUCCESS => Ok(Self::Success),
+            gg_request_status_GG_REQUEST_HANDLED => Ok(Self::Handled),
+            gg_request_status_GG_REQUEST_UNHANDLED => Ok(Self::Unhandled),
+            gg_request_status_GG_REQUEST_UNKNOWN => Ok(Self::Unknown),
+            gg_request_status_GG_REQUEST_AGAIN => Ok(Self::Again),
             _ => Err(Self::Error::Unknown(format!(
                 "Unknown error code: {}",
                 value

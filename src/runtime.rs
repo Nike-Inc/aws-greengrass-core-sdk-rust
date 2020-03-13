@@ -24,9 +24,12 @@ lazy_static! {
 
 /// Type of runtime. Currently only one, Async exits
 pub enum RuntimeOption {
-    /// The runtime will be started in the current thread an block preventing exit
+    /// The runtime will be started in the current thread an block preventing exit.
+    /// This is the option that should be used for On-demand greengrass lambda functions.
+    /// This is the default option.
     Sync,
-    /// The runtime will start in a new thread. If main() exits, the runtime stops`
+    /// The runtime will start in a new thread. If main() exits, the runtime stops.
+    /// This is useful for long lived lambda functions.
     Async,
 }
 
@@ -50,7 +53,7 @@ pub struct Runtime {
 impl Default for Runtime {
     fn default() -> Self {
         Runtime {
-            runtime_option: RuntimeOption::Async,
+            runtime_option: RuntimeOption::Sync,
             handler: None,
         }
     }

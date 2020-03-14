@@ -60,7 +60,7 @@ impl Initializer {
     /// Initializer::default().with_runtime(Runtime::default());
     /// ```
     pub fn with_runtime(self, runtime: Runtime) -> Self {
-        Initializer { runtime, ..self }
+        Initializer { runtime }
     }
 }
 

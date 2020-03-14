@@ -1,4 +1,5 @@
-#![allow(dead_code, improper_ctypes, unused_variables, non_upper_case_globals, non_camel_case_types, non_snake_case)]
+#![allow(dead_code, improper_ctypes, unused_variables, non_upper_case_globals, non_camel_case_types,
+    non_snake_case, clippy::all)]
 //! This module encapsulates the bindings for the C library
 //! The bindings are regenerated on build on every build.
 //! For testing we do two things

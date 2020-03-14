@@ -45,14 +45,14 @@ fn to_gg_log(record: &Record) {
     let bytes = formatted.into_bytes();
 
     let c_to_print = CString::new(bytes.as_slice()).expect("CString: new failed");
-    let level = to_gg_log_level(&record.level());
+    let level = to_gg_log_level(record.level());
     unsafe {
         gg_log(level, c_to_print.as_ptr());
     }
 }
 
 /// Coerces a [`log::Level`] into a green grass log level
-fn to_gg_log_level(l: &Level) -> gg_log_level {
+fn to_gg_log_level(l: Level) -> gg_log_level {
     match l {
         Level::Info => gg_log_level_GG_LOG_INFO,
         Level::Warn => gg_log_level_GG_LOG_WARN,

@@ -61,6 +61,8 @@ impl GGError {
         }
     }
 
+    // Converts the error to an IoError
+    #[allow(clippy::wrong_self_convention)]
     pub fn as_ioerror(self) -> IOError {
         IOError::new(IOErrorKind::Other, self)
     }

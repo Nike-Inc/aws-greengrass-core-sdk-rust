@@ -12,7 +12,6 @@ use crate::GGResult;
 use crate::error::GGError;
 use crate::with_request;
 use crate::request::GGRequestResponse;
-use serde::de::DeserializeOwned;
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
@@ -55,25 +54,64 @@ pub struct LambdaClient {
 
 impl LambdaClient {
 
-    /// Allows lambda invocation with an optional payload. The lambda
+    /// Allows lambda invocation with an optional payload and wait for a response.
+    ///
+    /// # Example
+    /// ```rust
+    /// use serde::Serialize;
+    /// use aws_greengrass_core_rust::lambda::LambdaClient;
+    /// use aws_greengrass_core_rust::lambda::InvokeOptions;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Context {
+    ///     foo: String,
+    ///     bar: String,
+    /// }
+    ///
+    /// fn main() {
+    ///     let payload = "Some payload";;
+    ///     let context = Context { foo: "blah".to_owned(), bar: "baz".to_owned() };
+    ///     let options = InvokeOptions::new("my_func_arn".to_owned(), context, "lambda qualifier".to_owned());
+    ///     let response = LambdaClient::default().invoke_sync(options, Some(payload));
+    ///     println!("response: {:?}", response);
+    /// }
+    /// ```
     #[cfg(not(feature = "mock"))]
-    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>, O: DeserializeOwned>(&self, option: &InvokeOptions<C>, payload: &Option<P>) -> GGResult<Option<O>> {
-        if let Some(bytes) = invoke(option, InvokeType::InvokeRequestResponse, payload)? {
-            serde_json::from_slice(bytes.as_slice()).map_err(GGError::from)
-        } else {
-            Ok(None)
-        }
+    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(&self, option: InvokeOptions<C>, payload: Option<P>) -> GGResult<Option<Vec<u8>>> {
+        invoke(&option, InvokeType::InvokeRequestResponse, &payload)
     }
 
     /// Allows lambda invocation with an optional payload. The lambda will be executed asynchronously and no response will be returned
+    ///
+    /// # Example
+    /// ```rust
+    /// use serde::Serialize;
+    /// use aws_greengrass_core_rust::lambda::LambdaClient;
+    /// use aws_greengrass_core_rust::lambda::InvokeOptions;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Context {
+    ///     foo: String,
+    ///     bar: String,
+    /// }
+    ///
+    /// fn main() {
+    ///     let payload = "Some payload";
+    ///     let context = Context { foo: "blah".to_owned(), bar: "baz".to_owned() };
+    ///     let options = InvokeOptions::new("my_func_arn".to_owned(), context, "lambda qualifier".to_owned());
+    ///     if let Err(e) = LambdaClient::default().invoke_async(options, Some(payload)) {
+    ///         eprintln!("Error occurred: {}", e);
+    ///     }
+    /// }
+    /// ```
     #[cfg(not(feature = "mock"))]
-    pub fn invoke_async<C: Serialize, P: AsRef<[u8]>>(&self, option: &InvokeOptions<C>, payload: &Option<P>) -> GGResult<()> {
-        invoke(option, InvokeType::InvokeEvent, payload)
+    pub fn invoke_async<C: Serialize, P: AsRef<[u8]>>(&self, option: InvokeOptions<C>, payload: Option<P>) -> GGResult<()> {
+        invoke(&option, InvokeType::InvokeEvent, &payload)
             .map(|_| ())
     }
 
     #[cfg(all(test, feature = "mock"))]
-    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>, O: DeserializeOwned>(&self, option: &InvokeOptions<C>, payload: &Option<P>) -> GGResult<Option<O>> {
+    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(&self, option: &InvokeOptions<C>, payload: &Option<P>) -> GGResult<Option<Vec<u8>>> {
         log::warn!("Mock invoke_sync is being executed!!! This should not happen in prod!!!!");
         let opts = InvokeOptionsInput::from(option);
         let payload_bytes = payload.as_ref().map(|p| p.as_ref().to_vec());
@@ -317,17 +355,17 @@ mod test {
 
         let qualifier = "12121221";
 
-        let payload_bytes = Some(serde_json::to_vec(&payload).unwrap());
+        let payload_bytes = serde_json::to_vec(&payload).unwrap();
 
         let options =
             InvokeOptions::new(function_arn.to_owned(), context.clone(), qualifier.to_owned());
 
-        LambdaClient::default().invoke_async(&options, &payload_bytes).unwrap();
+        LambdaClient::default().invoke_async(options, Some(payload_bytes.clone())).unwrap();
 
         GG_INVOKE_ARGS.with(|rc| {
             let args = rc.borrow();
             assert_eq!(args.qualifier, qualifier);
-            assert_eq!(args.payload, payload_bytes.unwrap());
+            assert_eq!(args.payload, payload_bytes);
             assert_eq!(args.customer_context, serde_json::to_vec(&context).unwrap());
             assert_eq!(args.function_arn, function_arn);
             assert_eq!(args.invoke_type, InvokeType::InvokeEvent);
@@ -353,7 +391,7 @@ mod test {
         let function_arn = "function_arn2323t867";
 
         let context = TestContext {
-            foo: "barkj".to_string()
+            foo: "bark".to_string()
         };
 
         let payload = TestPayload {
@@ -362,18 +400,18 @@ mod test {
 
         let qualifier = "12121221";
 
-        let payload_bytes = Some(serde_json::to_vec(&payload).unwrap());
+        let payload_bytes = serde_json::to_vec(&payload).unwrap();
 
         let options =
             InvokeOptions::new(function_arn.to_owned(), context.clone(), qualifier.to_owned());
 
-        let result: TestPayload = LambdaClient::default().invoke_sync(&options, &payload_bytes).unwrap().unwrap();
-        assert_eq!(result, response);
+        let result: Vec<u8> = LambdaClient::default().invoke_sync(options, Some(payload_bytes.clone())).unwrap().unwrap();
+        assert_eq!(serde_json::from_slice::<TestPayload>(result.as_ref()).unwrap(), response);
 
         GG_INVOKE_ARGS.with(|rc| {
             let args = rc.borrow();
             assert_eq!(args.qualifier, qualifier);
-            assert_eq!(args.payload, payload_bytes.unwrap());
+            assert_eq!(args.payload, payload_bytes);
             assert_eq!(args.customer_context, serde_json::to_vec(&context).unwrap());
             assert_eq!(args.function_arn, function_arn);
             assert_eq!(args.invoke_type, InvokeType::InvokeRequestResponse);

@@ -25,19 +25,23 @@ pub mod test {
     use std::os::raw::c_void;
     use std::thread_local;
     use uuid::Uuid;
+    use std::convert::TryFrom;
+    use base64;
+    use crate::lambda::InvokeType;
 
     // Thread locals used for testing
     thread_local! {
-        pub static GG_SHADOW_THING_ARG: RefCell<String> = RefCell::new("".to_owned());
-        pub static GG_UPDATE_PAYLOAD: RefCell<String> = RefCell::new("".to_owned());
-        pub static GG_REQUEST_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
-        pub static GG_REQUEST: RefCell<_gg_request> = RefCell::new(_gg_request::default());
-        pub static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
+        pub(crate) static GG_SHADOW_THING_ARG: RefCell<String> = RefCell::new("".to_owned());
+        pub(crate) static GG_UPDATE_PAYLOAD: RefCell<String> = RefCell::new("".to_owned());
+        pub(crate) static GG_REQUEST_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
+        pub(crate) static GG_REQUEST: RefCell<_gg_request> = RefCell::new(_gg_request::default());
+        pub(crate) static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
         /// used to store the arguments passed to gg_publish
-        pub static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
-        pub static GG_GET_SECRET_VALUE_ARGS: RefCell<GGGetSecretValueArgs> = RefCell::new(GGGetSecretValueArgs::default());
-        pub static GG_GET_SECRET_VALUE_RETURN: RefCell<gg_error> = RefCell::new(gg_error_GGE_SUCCESS);
-        pub static GG_CLOSE_REQUEST_COUNT: RefCell<u8> = RefCell::new(0);
+        pub(crate) static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
+        pub(crate) static GG_GET_SECRET_VALUE_ARGS: RefCell<GGGetSecretValueArgs> = RefCell::new(GGGetSecretValueArgs::default());
+        pub(crate) static GG_GET_SECRET_VALUE_RETURN: RefCell<gg_error> = RefCell::new(gg_error_GGE_SUCCESS);
+        pub(crate) static GG_CLOSE_REQUEST_COUNT: RefCell<u8> = RefCell::new(0);
+        pub(crate) static GG_INVOKE_ARGS: RefCell<GGInvokeArgs> = RefCell::new(GGInvokeArgs::default());
     }
 
     pub fn reset_test_state() {
@@ -246,7 +250,7 @@ pub mod test {
     }
 
     #[derive(Debug, Clone, Default)]
-    pub struct GGGetSecretValueArgs {
+    pub(crate) struct GGGetSecretValueArgs {
         pub ggreq: _gg_request,
         pub secret_id: String,
         pub version_id: Option<String>,
@@ -309,11 +313,37 @@ pub mod test {
         pub payload_size: usize,
     }
 
+    #[derive(Debug, Default)]
+    pub(crate) struct GGInvokeArgs {
+        pub(crate) function_arn: String,
+        pub(crate) customer_context: Vec<u8>,
+        pub(crate) qualifier: String,
+        pub(crate) invoke_type: InvokeType,
+        pub(crate) payload: Vec<u8>,
+    }
+
     pub extern "C" fn gg_invoke(
         ggreq: gg_request,
         opts: *const gg_invoke_options,
         result: *mut gg_request_result,
     ) -> gg_error {
+        unsafe {
+            GG_INVOKE_ARGS.with(|rc| {
+                let mut dst = Vec::with_capacity((*opts).payload_size);
+                dst.set_len((*opts).payload_size);
+                std::ptr::copy((*opts).payload as *const u8, dst.as_mut_ptr(), (*opts).payload_size);
+
+                let args = GGInvokeArgs {
+                    function_arn: CStr::from_ptr((*opts).function_arn).to_owned().into_string().unwrap(),
+                    customer_context: base64::decode(CStr::from_ptr((*opts).customer_context).to_owned().into_bytes()).unwrap(),
+                    qualifier: CStr::from_ptr((*opts).qualifier).to_owned().into_string().unwrap(),
+                    invoke_type: InvokeType::try_from((*opts).type_).unwrap(),
+                    payload: dst,
+                };
+                rc.replace(args);
+            });
+        }
+
         gg_error_GGE_SUCCESS
     }
 

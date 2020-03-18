@@ -99,6 +99,7 @@ impl Default for IOTDataClient {
     }
 }
 
+/// Provides mock testing utilities
 #[cfg(all(test, feature = "mock"))]
 pub mod mock {
     use super::*;

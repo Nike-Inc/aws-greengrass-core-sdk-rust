@@ -25,6 +25,7 @@ pub mod request;
 pub mod runtime;
 pub mod secret;
 pub mod shadow;
+pub mod lambda;
 
 use crate::bindings::gg_global_init;
 use crate::error::GGError;

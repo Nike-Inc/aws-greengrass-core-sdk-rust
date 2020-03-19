@@ -38,10 +38,14 @@ pub mod test {
         pub(crate) static GG_LAMBDA_HANDLER_READ_BUFFER: RefCell<Vec<u8>> = RefCell::new(vec![]);
         /// used to store the arguments passed to gg_publish
         pub(crate) static GG_PUBLISH_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
+        pub(crate) static GG_PUBLISH_WITH_OPTIONS_ARGS: RefCell<GGPublishPayloadArgs> = RefCell::new(GGPublishPayloadArgs::default());
         pub(crate) static GG_GET_SECRET_VALUE_ARGS: RefCell<GGGetSecretValueArgs> = RefCell::new(GGGetSecretValueArgs::default());
         pub(crate) static GG_GET_SECRET_VALUE_RETURN: RefCell<gg_error> = RefCell::new(gg_error_GGE_SUCCESS);
         pub(crate) static GG_CLOSE_REQUEST_COUNT: RefCell<u8> = RefCell::new(0);
+        pub(crate) static GG_PUBLISH_OPTION_INIT_COUNT: RefCell<u8> = RefCell::new(0);
+        pub(crate) static GG_PUBLISH_OPTION_FREE_COUNT: RefCell<u8> = RefCell::new(0);
         pub(crate) static GG_INVOKE_ARGS: RefCell<GGInvokeArgs> = RefCell::new(GGInvokeArgs::default());
+        pub(crate) static GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY: RefCell<gg_queue_full_policy_options> = RefCell::new(1515);
     }
 
     pub fn reset_test_state() {
@@ -51,9 +55,13 @@ pub mod test {
         GG_REQUEST.with(|rc| rc.replace(_gg_request::default()));
         GG_LAMBDA_HANDLER_READ_BUFFER.with(|rc| rc.replace(vec![]));
         GG_PUBLISH_ARGS.with(|rc| rc.replace(GGPublishPayloadArgs::default()));
+        GG_PUBLISH_WITH_OPTIONS_ARGS.with(|rc| rc.replace(GGPublishPayloadArgs::default()));
         GG_GET_SECRET_VALUE_ARGS.with(|rc| rc.replace(GGGetSecretValueArgs::default()));
         GG_CLOSE_REQUEST_COUNT.with(|rc| rc.replace(0));
+        GG_PUBLISH_OPTION_INIT_COUNT.with(|rc| rc.replace(0));
+        GG_PUBLISH_OPTION_FREE_COUNT.with(|rc| rc.replace(0));
         GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(gg_error_GGE_SUCCESS));
+        GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| rc.replace(1515));
     }
 
     #[derive(Debug, Copy, Clone, Default)]
@@ -348,10 +356,18 @@ pub mod test {
     }
 
     pub extern "C" fn gg_publish_options_init(opts: *mut gg_publish_options) -> gg_error {
+        GG_PUBLISH_OPTION_INIT_COUNT.with(|rc| {
+            let new_value = *rc.borrow() + 1;
+            rc.replace(new_value);
+        });
         gg_error_GGE_SUCCESS
     }
 
     pub extern "C" fn gg_publish_options_free(opts: gg_publish_options) -> gg_error {
+        GG_PUBLISH_OPTION_FREE_COUNT.with(|rc| {
+            let new_value = *rc.borrow() + 1;
+            rc.replace(new_value);
+        });
         gg_error_GGE_SUCCESS
     }
 
@@ -359,7 +375,18 @@ pub mod test {
         opts: gg_publish_options,
         policy: gg_queue_full_policy_options,
     ) -> gg_error {
+        GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| {
+            rc.replace(policy);
+        });
         gg_error_GGE_SUCCESS
+    }
+
+    /// Represents arguments passed to gg_publish
+    #[derive(Debug, Default, PartialEq)]
+    pub struct GGPublishPayloadArgs {
+        pub topic: String,
+        pub payload: Vec<u8>,
+        pub payload_size: usize,
     }
 
     pub extern "C" fn gg_publish_with_options(
@@ -370,15 +397,23 @@ pub mod test {
         opts: gg_publish_options,
         result: *mut gg_request_result,
     ) -> gg_error {
-        gg_error_GGE_SUCCESS
-    }
+        unsafe {
+            GG_PUBLISH_WITH_OPTIONS_ARGS.with(|args| {
+                // read the void* payload pointer into a byte array
+                let mut dst = Vec::with_capacity(payload_size);
+                dst.set_len(payload_size);
+                std::ptr::copy(payload as *const u8, dst.as_mut_ptr(), payload_size);
 
-    /// Represents arguments passed to gg_publish
-    #[derive(Debug, Default, PartialEq)]
-    pub struct GGPublishPayloadArgs {
-        pub topic: String,
-        pub payload: Vec<u8>,
-        pub payload_size: usize,
+                let gg_args = GGPublishPayloadArgs {
+                    topic: CStr::from_ptr(topic).to_owned().into_string().unwrap(),
+                    payload: dst,
+                    payload_size,
+                };
+
+                args.replace(gg_args);
+            });
+        }
+        gg_error_GGE_SUCCESS
     }
 
     pub extern "C" fn gg_publish(

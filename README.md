@@ -7,11 +7,6 @@ Provides an idiomatic Rust API around the [AWS Greengrass Core C SDK](https://gi
 * Logging to the greengrass logging backend via the log crate
 * Acquiring Secrets
 
-## Not yet Supported functionality that is available in the C SDK
-* Publishing with options
-* Changing queue full policies
-* Lambda invocation
-
 ## Examples
 * [hello.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/hello.rs) - Simple example for initializing the greengrass runtime and sending a message on a topic
 * [echo.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/echo.rs) - Example that shows how to register a Handler with the greengrass runtime and listen for message.

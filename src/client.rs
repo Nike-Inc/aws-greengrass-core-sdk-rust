@@ -15,8 +15,77 @@ use crate::request::GGRequestResponse;
 use crate::with_request;
 use crate::GGResult;
 
+/// What actions should be taken if an MQTT queue is full
+#[derive(Clone, Debug)]
+pub enum QueueFullPolicy {
+    /// GGC will deliver messages to as many targets as possible
+    BestEffort,
+    /// GGC will either deliver messages to all targets and return request
+    /// successful status or deliver to no targets and return a
+    /// GGError::ErrorResponse with a GGRequestResponse with a status of 'Again'
+    AllOrError,
+}
+
+impl QueueFullPolicy {
+    fn to_queue_full_c(&self) -> gg_queue_full_policy_options {
+        match self {
+            Self::BestEffort => gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_BEST_EFFORT,
+            Self::AllOrError => gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR,
+        }
+    }
+}
+
+/// Options that can be supplied when the client publishes
+#[derive(Clone, Debug)]
+pub struct PublishOptions {
+    pub queue_full_policy: QueueFullPolicy
+}
+
+impl PublishOptions {
+    /// Define a custom policy when publishing from this client
+    pub fn with_queue_full_policy(self, queue_full_policy: QueueFullPolicy) -> Self {
+        PublishOptions {
+            queue_full_policy
+        }
+    }
+}
+
+impl Default for PublishOptions {
+    fn default() -> Self {
+        PublishOptions {
+            queue_full_policy: QueueFullPolicy::BestEffort
+        }
+    }
+}
+
+
+/// Provides MQTT publishing to Greengrass lambda functions
+///
+/// # Examples
+///
+/// ## Basic Publishing
+/// ```rust
+/// use aws_greengrass_core_rust::client::IOTDataClient;
+/// let client = IOTDataClient::default();
+/// if let Err(e) = client.publish("some_topic", r#"{"msg": "some payload"}"#) {
+///     eprintln!("An error occurred publishing: {}", e);
+/// }
+/// ```
+///
+/// ## Publishing with Options
+/// ```rust
+/// use aws_greengrass_core_rust::client::{PublishOptions, QueueFullPolicy, IOTDataClient};
+/// let options = PublishOptions::default().with_queue_full_policy(QueueFullPolicy::AllOrError);
+/// let client = IOTDataClient::default().with_publish_options(Some(options));
+/// if let Err(e) = client.publish("some_topic", r#"{"msg": "some payload"}"#) {
+///     eprintln!("An error occurred publishing: {}", e);
+/// }
+/// ```
 #[derive(Clone)]
 pub struct IOTDataClient {
+    /// The policy that this client will use when publishing
+    /// if one has been defined
+    pub publish_options: Option<PublishOptions>,
     /// When the mock feature is turned on this field will contain captured input
     /// and values to be returned
     #[cfg(all(test, feature = "mock"))]
@@ -40,26 +109,79 @@ impl IOTDataClient {
     /// Raw publish method that wraps gg_request_init, gg_publish
     #[cfg(not(all(test, feature = "mock")))]
     pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
+        self.publish_with_options(topic, buffer, read)
+    }
+
+    /// This wraps publish_internal and will set any publish options if publish options were specified
+    /// The primary reason this is a separate function from publish_internal is to ensure that if
+    /// options is specified we clean up the pointer we create on error
+    fn publish_with_options(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
         unsafe {
-            info!("Publishing message of length {} to topic {}", read, topic);
-            let topic_c = CString::new(topic).map_err(GGError::from)?;
+            // If options were defined, initialize the options pointer and
+            // set queue policy
+            let options_c: Option<gg_publish_options> = if let Some(po) = &self.publish_options {
+                let mut opts_c: gg_publish_options = ptr::null_mut();
+                let init_resp = gg_publish_options_init(&mut opts_c);
+                GGError::from_code(init_resp)?;
 
-            let mut req: gg_request = ptr::null_mut();
-            with_request!(req, {
-                let mut res = gg_request_result {
-                    request_status: gg_request_status_GG_REQUEST_SUCCESS,
-                };
+                let queue_policy_c = po.queue_full_policy.to_queue_full_c();
+                let policy_resp = gg_publish_options_set_queue_full_policy(opts_c, queue_policy_c);
+                GGError::from_code(policy_resp)?;
 
-                let pub_res = gg_publish(
+                Some(opts_c)
+            } else {
+                None
+            };
+
+            let publish_result = self.publish_internal(topic, buffer, read, options_c);
+
+            // Clean up the options pointer if we created one
+            if let Some(opts) = options_c {
+                let free_resp = gg_publish_options_free(opts);
+                GGError::from_code(free_resp)?;
+            }
+            publish_result
+        }
+    }
+
+    /// Raw publish method that wraps gg_request_init, gg_publish
+    unsafe fn publish_internal(&self, topic: &str, buffer: &[u8], read: usize,
+                               options_tuple: Option<gg_publish_options>) -> GGResult<()> {
+        info!("Publishing message of length {} to topic {}", read, topic);
+        let topic_c = CString::new(topic).map_err(GGError::from)?;
+        let mut req: gg_request = ptr::null_mut();
+        with_request!(req, {
+            let mut res = gg_request_result {
+                request_status: gg_request_status_GG_REQUEST_SUCCESS,
+            };
+            let pub_res = if let Some(options_c) = options_tuple {
+                gg_publish_with_options(
+                    req,
+                    topic_c.as_ptr(),
+                    buffer as *const _ as *const c_void,
+                    read,
+                    options_c,
+                    &mut res
+                )
+            } else {
+                gg_publish(
                     req,
                     topic_c.as_ptr(),
                     buffer as *const _ as *const c_void,
                     read,
                     &mut res,
-                );
-                GGError::from_code(pub_res)?;
-                GGRequestResponse::try_from(&res)?.to_error_result(req)
-            })
+                )
+            };
+            GGError::from_code(pub_res)?;
+            GGRequestResponse::try_from(&res)?.to_error_result(req)
+        })
+    }
+
+    /// Optionally define a publishing options for this Client
+    pub fn with_publish_options(self, publish_options: Option<PublishOptions>) -> Self {
+        IOTDataClient {
+            publish_options,
+            ..self
         }
     }
 
@@ -93,6 +215,7 @@ impl IOTDataClient {
 impl Default for IOTDataClient {
     fn default() -> Self {
         IOTDataClient {
+            publish_options: None,
             #[cfg(all(test, feature = "mock"))]
             mocks: MockHolder::default(),
         }
@@ -149,6 +272,7 @@ pub mod mock {
     // Note: This is to get past compile issues.. Mock testing for threads
     // could result in undefined behavior
     unsafe impl Send for MockHolder {}
+
     unsafe impl Sync for MockHolder {}
 
     #[cfg(test)]
@@ -175,6 +299,7 @@ pub mod mock {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde_json::Value;
 
     #[cfg(not(feature = "mock"))]
     #[test]
@@ -193,5 +318,29 @@ mod test {
         });
         GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
+    }
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_publish_with_options() {
+        reset_test_state();
+        let topic = "another topic";
+        let my_payload: Value = serde_json::from_str(r#"{"foo": "bar"}"#).unwrap();
+        let publish_options = PublishOptions::default().with_queue_full_policy(QueueFullPolicy::AllOrError);
+        let client = IOTDataClient::default().with_publish_options(Some(publish_options));
+        client.publish_json(topic, my_payload.clone()).unwrap();
+
+        GG_PUBLISH_WITH_OPTIONS_ARGS.with(|rc| {
+            let args = rc.borrow();
+            let my_payload_as_bytes = serde_json::to_vec(&my_payload).unwrap();
+            assert_eq!(args.topic, topic);
+            assert_eq!(args.payload, my_payload_as_bytes);
+            assert_eq!(args.payload_size, my_payload_as_bytes.len());
+        });
+        GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
+        GG_PUBLISH_OPTION_INIT_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_PUBLISH_OPTION_FREE_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
+        GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| assert_eq!(*rc.borrow(), gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR));
     }
 }

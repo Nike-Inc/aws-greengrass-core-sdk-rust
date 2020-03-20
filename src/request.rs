@@ -7,7 +7,7 @@
 //!
 //! ## Error Handling Example
 //! ```rust
-//! use aws_greengrass_core_rust::client::IOTDataClient;
+//! use aws_greengrass_core_rust::iotdata::IOTDataClient;
 //! use aws_greengrass_core_rust::error::GGError;
 //! use aws_greengrass_core_rust::request::GGRequestStatus;
 //! match IOTDataClient::default().publish("my topic", "my payload") {

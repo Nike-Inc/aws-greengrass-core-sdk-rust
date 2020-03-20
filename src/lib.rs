@@ -20,12 +20,12 @@ mod bindings;
 pub mod client;
 pub mod error;
 pub mod handler;
+pub mod lambda;
 pub mod log;
 pub mod request;
 pub mod runtime;
 pub mod secret;
 pub mod shadow;
-pub mod lambda;
 
 use crate::bindings::gg_global_init;
 use crate::error::GGError;

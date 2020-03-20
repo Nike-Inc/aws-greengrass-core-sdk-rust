@@ -15,7 +15,7 @@ use std::default::Default;
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
 
-/// Provides the ability to interfact with a Thing's (Device) Shadow document
+/// Provides the ability to interact with a Thing's (Device) Shadow document
 ///
 /// Information on shadow documents can be found at: https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html#device-shadow-example
 #[derive(Clone)]

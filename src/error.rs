@@ -1,3 +1,5 @@
+//! Provides error handling
+
 use crate::bindings::*;
 use crate::handler::LambdaContext;
 use crate::request::GGRequestResponse;

@@ -1,3 +1,6 @@
+//! Provides the ability to acquire secrets that have been registered with the Greengrass group
+//! that the lambda function has been configured to run in.
+
 use crate::bindings::*;
 use crate::error::GGError;
 use crate::request::GGRequestResponse;

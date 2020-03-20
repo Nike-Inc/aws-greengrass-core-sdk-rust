@@ -1,3 +1,26 @@
+//! Provides utilities for working with handling green grass response objects.
+//! Generally consumers of the API will not use items in this module, except in error cases.
+//! In error cases the GGRequestResponse struct will be embedded in the the GGError::ErrorResponse.
+//! In this case we are exposing it as I we don't know every possible error that AWS returns.
+//!
+//! # Examples
+//!
+//! ## Error Handling Example
+//! ```rust
+//! use aws_greengrass_core_rust::client::IOTDataClient;
+//! use aws_greengrass_core_rust::error::GGError;
+//! use aws_greengrass_core_rust::request::GGRequestStatus;
+//! match IOTDataClient::default().publish("my topic", "my payload") {
+//!     Ok(_) => println!("Yay, it worked!"),
+//!     Err(GGError::ErrorResponse(resp)) => {
+//!         match resp.request_status {
+//!             GGRequestStatus::Again => eprintln!("You should retry again because you were throttled"),
+//!             _ => eprintln!("An error that is probably unrecoverable happened."),
+//!         }
+//!     }
+//!     _ => eprintln!("Another greengrass system error occurred"),
+//! }
+//! ```
 use crate::bindings::*;
 use crate::error::GGError;
 use crate::GGResult;
@@ -46,9 +69,15 @@ impl TryFrom<&gg_request_status> for GGRequestStatus {
     }
 }
 
+/// Represents the response returned by greengrass via the gg_read_response C function.
+/// Generally this will only be used internally to the API (Success), except in the case of most error responses.
+/// In most server side error responses (where we receive a json error object) this object will be contained
+/// inside the GGError::ErrorResponse error.
 #[derive(Debug, Clone, Serialize)]
 pub struct GGRequestResponse {
+    /// The status of the GG request
     pub request_status: GGRequestStatus,
+    /// If there was an error response, what was it.
     pub error_response: Option<ErrorResponse>,
 }
 
@@ -60,6 +89,7 @@ impl GGRequestResponse {
         }
     }
 
+    /// Returns true if the request status is anything other than GGRequestStatus::Success
     pub fn is_error(&self) -> bool {
         self.request_status != GGRequestStatus::Success
     }
@@ -115,9 +145,15 @@ impl GGRequestResponse {
     }
 }
 
+/// There are three states instead of two (why I didn't use option).
+/// This is because I want to capture the 404 error response and wrap it as Option in an attempt
+/// to make the API feel more idiomatic
 enum ErrorState {
+    /// All other errors
     Error(GGError),
+    /// A 404 error was returned
     NotFoundError,
+    /// No Error response was found
     None,
 }
 
@@ -142,10 +178,14 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
     }
 }
 
+/// Represents an Error Response from greengrass JSON object
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ErrorResponse {
+    /// AWS uses the HTTP status codes even though this is over MQTT
     pub code: u16,
+    /// Message related to the error
     pub message: String,
+    /// The time this error occurred
     pub timestamp: u64,
 }
 

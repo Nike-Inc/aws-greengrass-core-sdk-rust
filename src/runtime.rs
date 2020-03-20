@@ -11,6 +11,7 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 use std::thread;
 
+/// The size of the buffer for reading content received via the C SDK
 const BUFFER_SIZE: usize = 100;
 
 /// Denotes a handler that is thread safe

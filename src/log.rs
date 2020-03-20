@@ -1,3 +1,4 @@
+//! Provide a log crate log implementation that delegates to the the Greengrass logging infrastructure
 use crate::bindings::*;
 use lazy_static::lazy_static;
 use log::{self, Level, LevelFilter, Log, Metadata, Record};
@@ -58,5 +59,50 @@ fn to_gg_log_level(l: Level) -> gg_log_level {
         Level::Warn => gg_log_level_GG_LOG_WARN,
         Level::Error => gg_log_level_GG_LOG_ERROR,
         _ => gg_log_level_GG_LOG_DEBUG,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_log() {
+        init_log(LevelFilter::Trace);
+        log::info!("info test");
+        log::warn!("warn test");
+        log::error!("error test");
+        log::debug!("debug test");
+        log::trace!("trace test"); // trace should end up as debug
+        GG_LOG_ARGS.with(|rc| {
+            let borrowed = rc.borrow();
+            assert_eq!(borrowed.len(), 5);
+            let info_value = LogArgs::new(
+                gg_log_level_GG_LOG_INFO,
+                "aws_greengrass_core_rust::log::test -- info test",
+            );
+            assert!(borrowed.contains(&info_value));
+            let debug_value = LogArgs::new(
+                gg_log_level_GG_LOG_DEBUG,
+                "aws_greengrass_core_rust::log::test -- debug test",
+            );
+            assert!(borrowed.contains(&debug_value));
+            let warn_value = LogArgs::new(
+                gg_log_level_GG_LOG_WARN,
+                "aws_greengrass_core_rust::log::test -- warn test",
+            );
+            assert!(borrowed.contains(&warn_value));
+            let error_value = LogArgs::new(
+                gg_log_level_GG_LOG_ERROR,
+                "aws_greengrass_core_rust::log::test -- error test",
+            );
+            assert!(borrowed.contains(&error_value));
+            let trace_value = LogArgs::new(
+                gg_log_level_GG_LOG_DEBUG,
+                "aws_greengrass_core_rust::log::test -- trace test",
+            );
+            assert!(borrowed.contains(&trace_value));
+        });
     }
 }

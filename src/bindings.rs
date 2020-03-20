@@ -20,14 +20,14 @@ pub use self::test::*;
 /// Useful for internal testing.
 #[cfg(test)]
 pub mod test {
+    use crate::lambda::InvokeType;
+    use base64;
     use std::cell::RefCell;
+    use std::convert::TryFrom;
     use std::ffi::CStr;
     use std::os::raw::c_void;
     use std::thread_local;
     use uuid::Uuid;
-    use std::convert::TryFrom;
-    use base64;
-    use crate::lambda::InvokeType;
 
     // Thread locals used for testing
     thread_local! {
@@ -46,6 +46,7 @@ pub mod test {
         pub(crate) static GG_PUBLISH_OPTION_FREE_COUNT: RefCell<u8> = RefCell::new(0);
         pub(crate) static GG_INVOKE_ARGS: RefCell<GGInvokeArgs> = RefCell::new(GGInvokeArgs::default());
         pub(crate) static GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY: RefCell<gg_queue_full_policy_options> = RefCell::new(1515);
+        pub(crate) static GG_LOG_ARGS: RefCell<Vec<LogArgs>> = RefCell::new(vec![]);
     }
 
     pub fn reset_test_state() {
@@ -62,6 +63,7 @@ pub mod test {
         GG_PUBLISH_OPTION_FREE_COUNT.with(|rc| rc.replace(0));
         GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(gg_error_GGE_SUCCESS));
         GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| rc.replace(1515));
+        GG_LOG_ARGS.with(|rc| rc.replace(vec![]));
     }
 
     #[derive(Debug, Copy, Clone, Default)]
@@ -133,10 +135,30 @@ pub mod test {
         gg_error_GGE_SUCCESS
     }
 
+    #[derive(PartialEq, Debug)]
+    pub struct LogArgs {
+        level: gg_log_level,
+        format: String,
+    }
+
+    impl LogArgs {
+        pub fn new(level: gg_log_level, format: &str) -> Self {
+            LogArgs {
+                level,
+                format: format.to_owned(),
+            }
+        }
+    }
+
     pub extern "C" fn gg_log(
         level: gg_log_level,
         format: *const ::std::os::raw::c_char,
     ) -> gg_error {
+        unsafe {
+            let format = CStr::from_ptr(format).to_owned().into_string().unwrap();
+            let args = LogArgs { level, format };
+            GG_LOG_ARGS.with(|rc| rc.borrow_mut().push(args));
+        }
         gg_error_GGE_SUCCESS
     }
 
@@ -339,12 +361,27 @@ pub mod test {
             GG_INVOKE_ARGS.with(|rc| {
                 let mut dst = Vec::with_capacity((*opts).payload_size);
                 dst.set_len((*opts).payload_size);
-                std::ptr::copy((*opts).payload as *const u8, dst.as_mut_ptr(), (*opts).payload_size);
+                std::ptr::copy(
+                    (*opts).payload as *const u8,
+                    dst.as_mut_ptr(),
+                    (*opts).payload_size,
+                );
 
                 let args = GGInvokeArgs {
-                    function_arn: CStr::from_ptr((*opts).function_arn).to_owned().into_string().unwrap(),
-                    customer_context: base64::decode(CStr::from_ptr((*opts).customer_context).to_owned().into_bytes()).unwrap(),
-                    qualifier: CStr::from_ptr((*opts).qualifier).to_owned().into_string().unwrap(),
+                    function_arn: CStr::from_ptr((*opts).function_arn)
+                        .to_owned()
+                        .into_string()
+                        .unwrap(),
+                    customer_context: base64::decode(
+                        CStr::from_ptr((*opts).customer_context)
+                            .to_owned()
+                            .into_bytes(),
+                    )
+                    .unwrap(),
+                    qualifier: CStr::from_ptr((*opts).qualifier)
+                        .to_owned()
+                        .into_string()
+                        .unwrap(),
                     invoke_type: InvokeType::try_from((*opts).type_).unwrap(),
                     payload: dst,
                 };

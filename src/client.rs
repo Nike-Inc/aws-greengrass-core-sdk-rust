@@ -1,3 +1,4 @@
+//! Provides the ability to publish MQTT topics
 use log::info;
 use serde::ser::Serialize;
 use std::convert::TryFrom;
@@ -38,26 +39,23 @@ impl QueueFullPolicy {
 /// Options that can be supplied when the client publishes
 #[derive(Clone, Debug)]
 pub struct PublishOptions {
-    pub queue_full_policy: QueueFullPolicy
+    pub queue_full_policy: QueueFullPolicy,
 }
 
 impl PublishOptions {
     /// Define a custom policy when publishing from this client
     pub fn with_queue_full_policy(self, queue_full_policy: QueueFullPolicy) -> Self {
-        PublishOptions {
-            queue_full_policy
-        }
+        PublishOptions { queue_full_policy }
     }
 }
 
 impl Default for PublishOptions {
     fn default() -> Self {
         PublishOptions {
-            queue_full_policy: QueueFullPolicy::BestEffort
+            queue_full_policy: QueueFullPolicy::BestEffort,
         }
     }
 }
-
 
 /// Provides MQTT publishing to Greengrass lambda functions
 ///
@@ -126,7 +124,12 @@ impl IOTDataClient {
 
                 let queue_policy_c = po.queue_full_policy.to_queue_full_c();
                 let policy_resp = gg_publish_options_set_queue_full_policy(opts_c, queue_policy_c);
-                GGError::from_code(policy_resp)?;
+                if let Err(e) = GGError::from_code(policy_resp) {
+                    // make sure that we free the options pointer
+                    let free_resp = gg_publish_options_free(opts_c);
+                    GGError::from_code(free_resp)?;
+                    return Err(e);
+                }
 
                 Some(opts_c)
             } else {
@@ -145,8 +148,13 @@ impl IOTDataClient {
     }
 
     /// Raw publish method that wraps gg_request_init, gg_publish
-    unsafe fn publish_internal(&self, topic: &str, buffer: &[u8], read: usize,
-                               options_tuple: Option<gg_publish_options>) -> GGResult<()> {
+    unsafe fn publish_internal(
+        &self,
+        topic: &str,
+        buffer: &[u8],
+        read: usize,
+        options_tuple: Option<gg_publish_options>,
+    ) -> GGResult<()> {
         info!("Publishing message of length {} to topic {}", read, topic);
         let topic_c = CString::new(topic).map_err(GGError::from)?;
         let mut req: gg_request = ptr::null_mut();
@@ -161,7 +169,7 @@ impl IOTDataClient {
                     buffer as *const _ as *const c_void,
                     read,
                     options_c,
-                    &mut res
+                    &mut res,
                 )
             } else {
                 gg_publish(
@@ -178,6 +186,7 @@ impl IOTDataClient {
     }
 
     /// Optionally define a publishing options for this Client
+    #[allow(clippy::needless_update)]
     pub fn with_publish_options(self, publish_options: Option<PublishOptions>) -> Self {
         IOTDataClient {
             publish_options,
@@ -326,7 +335,8 @@ mod test {
         reset_test_state();
         let topic = "another topic";
         let my_payload: Value = serde_json::from_str(r#"{"foo": "bar"}"#).unwrap();
-        let publish_options = PublishOptions::default().with_queue_full_policy(QueueFullPolicy::AllOrError);
+        let publish_options =
+            PublishOptions::default().with_queue_full_policy(QueueFullPolicy::AllOrError);
         let client = IOTDataClient::default().with_publish_options(Some(publish_options));
         client.publish_json(topic, my_payload.clone()).unwrap();
 
@@ -341,6 +351,11 @@ mod test {
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
         GG_PUBLISH_OPTION_INIT_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_PUBLISH_OPTION_FREE_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
-        GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| assert_eq!(*rc.borrow(), gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR));
+        GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| {
+            assert_eq!(
+                *rc.borrow(),
+                gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR
+            )
+        });
     }
 }

@@ -1,21 +1,20 @@
-use std::ffi::CString;
-use serde::Serialize;
 use base64::encode;
+use serde::Serialize;
 use serde_json;
-use std::os::raw::c_void;
-use std::ptr;
 use std::convert::TryFrom;
 use std::default::Default;
+use std::ffi::CString;
+use std::os::raw::c_void;
+use std::ptr;
 
 use crate::bindings::*;
-use crate::GGResult;
 use crate::error::GGError;
-use crate::with_request;
 use crate::request::GGRequestResponse;
+use crate::with_request;
+use crate::GGResult;
 
 #[cfg(all(test, feature = "mock"))]
 use self::mock::*;
-
 
 /// Options to invoke a specified lambda
 #[derive(Clone, Debug)]
@@ -29,7 +28,6 @@ pub struct InvokeOptions<C: Serialize> {
 }
 
 impl<C: Serialize> InvokeOptions<C> {
-
     /// Creates a new instance of InvokeOptions
     pub fn new(function_arn: String, customer_context: C, qualifier: String) -> Self {
         InvokeOptions {
@@ -43,17 +41,15 @@ impl<C: Serialize> InvokeOptions<C> {
         let json = serde_json::to_string(&self.customer_context).map_err(GGError::from)?;
         Ok(encode(json))
     }
-
 }
 
 /// Provides the ability to execute other lambda functions
 pub struct LambdaClient {
     #[cfg(all(test, feature = "mock"))]
-    pub mocks: MockHolder
+    pub mocks: MockHolder,
 }
 
 impl LambdaClient {
-
     /// Allows lambda invocation with an optional payload and wait for a response.
     ///
     /// # Example
@@ -68,16 +64,18 @@ impl LambdaClient {
     ///     bar: String,
     /// }
     ///
-    /// fn main() {
-    ///     let payload = "Some payload";;
-    ///     let context = Context { foo: "blah".to_owned(), bar: "baz".to_owned() };
-    ///     let options = InvokeOptions::new("my_func_arn".to_owned(), context, "lambda qualifier".to_owned());
-    ///     let response = LambdaClient::default().invoke_sync(options, Some(payload));
-    ///     println!("response: {:?}", response);
-    /// }
+    /// let payload = "Some payload";;
+    /// let context = Context { foo: "blah".to_owned(), bar: "baz".to_owned() };
+    /// let options = InvokeOptions::new("my_func_arn".to_owned(), context, "lambda qualifier".to_owned());
+    /// let response = LambdaClient::default().invoke_sync(options, Some(payload));
+    /// println!("response: {:?}", response);
     /// ```
     #[cfg(not(feature = "mock"))]
-    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(&self, option: InvokeOptions<C>, payload: Option<P>) -> GGResult<Option<Vec<u8>>> {
+    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(
+        &self,
+        option: InvokeOptions<C>,
+        payload: Option<P>,
+    ) -> GGResult<Option<Vec<u8>>> {
         invoke(&option, InvokeType::InvokeRequestResponse, &payload)
     }
 
@@ -95,23 +93,28 @@ impl LambdaClient {
     ///     bar: String,
     /// }
     ///
-    /// fn main() {
-    ///     let payload = "Some payload";
-    ///     let context = Context { foo: "blah".to_owned(), bar: "baz".to_owned() };
-    ///     let options = InvokeOptions::new("my_func_arn".to_owned(), context, "lambda qualifier".to_owned());
-    ///     if let Err(e) = LambdaClient::default().invoke_async(options, Some(payload)) {
-    ///         eprintln!("Error occurred: {}", e);
-    ///     }
+    /// let payload = "Some payload";
+    /// let context = Context { foo: "blah".to_owned(), bar: "baz".to_owned() };
+    /// let options = InvokeOptions::new("my_func_arn".to_owned(), context, "lambda qualifier".to_owned());
+    /// if let Err(e) = LambdaClient::default().invoke_async(options, Some(payload)) {
+    ///     eprintln!("Error occurred: {}", e);
     /// }
     /// ```
     #[cfg(not(feature = "mock"))]
-    pub fn invoke_async<C: Serialize, P: AsRef<[u8]>>(&self, option: InvokeOptions<C>, payload: Option<P>) -> GGResult<()> {
-        invoke(&option, InvokeType::InvokeEvent, &payload)
-            .map(|_| ())
+    pub fn invoke_async<C: Serialize, P: AsRef<[u8]>>(
+        &self,
+        option: InvokeOptions<C>,
+        payload: Option<P>,
+    ) -> GGResult<()> {
+        invoke(&option, InvokeType::InvokeEvent, &payload).map(|_| ())
     }
 
     #[cfg(all(test, feature = "mock"))]
-    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(&self, option: &InvokeOptions<C>, payload: &Option<P>) -> GGResult<Option<Vec<u8>>> {
+    pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(
+        &self,
+        option: &InvokeOptions<C>,
+        payload: &Option<P>,
+    ) -> GGResult<Option<Vec<u8>>> {
         log::warn!("Mock invoke_sync is being executed!!! This should not happen in prod!!!!");
         let opts = InvokeOptionsInput::from(option);
         let payload_bytes = payload.as_ref().map(|p| p.as_ref().to_vec());
@@ -128,7 +131,11 @@ impl LambdaClient {
     }
 
     #[cfg(all(test, feature = "mock"))]
-    pub fn invoke_async<C: Serialize, P: AsRef<[u8]>>(&self, option: &InvokeOptions<C>, payload: &Option<P>) -> GGResult<()> {
+    pub fn invoke_async<C: Serialize, P: AsRef<[u8]>>(
+        &self,
+        option: &InvokeOptions<C>,
+        payload: &Option<P>,
+    ) -> GGResult<()> {
         log::warn!("Mock invoke_async is being executed!!! This should not happen in prod!!!!");
         let opts = InvokeOptionsInput::from(option);
 
@@ -149,7 +156,7 @@ impl LambdaClient {
     /// provided outputs
     #[cfg(all(test, feature = "mock"))]
     pub fn with_mocks(self, mocks: MockHolder) -> Self {
-        LambdaClient {mocks, ..self}
+        LambdaClient { mocks, ..self }
     }
 }
 
@@ -161,7 +168,6 @@ impl Default for LambdaClient {
         }
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum InvokeType {
@@ -179,7 +185,7 @@ impl TryFrom<gg_invoke_type> for InvokeType {
         match value {
             gg_invoke_type_GG_INVOKE_EVENT => Ok(Self::InvokeEvent),
             gg_invoke_type_GG_INVOKE_REQUEST_RESPONSE => Ok(Self::InvokeRequestResponse),
-            _ => Err(GGError::Unknown(format!("Unknown invoke type: {}", value)))
+            _ => Err(GGError::Unknown(format!("Unknown invoke type: {}", value))),
         }
     }
 }
@@ -199,10 +205,15 @@ impl InvokeType {
     }
 }
 
-fn invoke<C: Serialize, P: AsRef<[u8]>>(option: &InvokeOptions<C>, invoke_type: InvokeType, payload: &Option<P>) -> GGResult<Option<Vec<u8>>> {
+fn invoke<C: Serialize, P: AsRef<[u8]>>(
+    option: &InvokeOptions<C>,
+    invoke_type: InvokeType,
+    payload: &Option<P>,
+) -> GGResult<Option<Vec<u8>>> {
     unsafe {
-        let function_arn_c =  CString::new(option.function_arn.as_str()).map_err(GGError::from)?;
-        let customer_context_c = CString::new(option.serialize_customer_context()?).map_err(GGError::from)?;
+        let function_arn_c = CString::new(option.function_arn.as_str()).map_err(GGError::from)?;
+        let customer_context_c =
+            CString::new(option.serialize_customer_context()?).map_err(GGError::from)?;
         let qualifier_c = CString::new(option.qualifier.as_str()).map_err(GGError::from)?;
         let payload_bytes = payload.as_ref().map(|p| p.as_ref());
         let (payload_c, payload_size) = if let Some(p) = payload_bytes {
@@ -225,17 +236,13 @@ fn invoke<C: Serialize, P: AsRef<[u8]>>(option: &InvokeOptions<C>, invoke_type: 
             let mut res = gg_request_result {
                 request_status: gg_request_status_GG_REQUEST_SUCCESS,
             };
-            let invoke_res = gg_invoke(
-                req,
-                Box::into_raw(options_c),
-                &mut res,
-            );
+            let invoke_res = gg_invoke(req, Box::into_raw(options_c), &mut res);
             GGError::from_code(invoke_res)?;
 
             match invoke_type {
                 InvokeType::InvokeEvent => {
-                   GGRequestResponse::try_from(&res)?.to_error_result(req)?;
-                   Ok(None)
+                    GGRequestResponse::try_from(&res)?.to_error_result(req)?;
+                    Ok(None)
                 }
                 InvokeType::InvokeRequestResponse => GGRequestResponse::try_from(&res)?.read(req),
             }
@@ -259,7 +266,7 @@ pub mod mock {
         pub qualifier: String,
     }
 
-    impl<C:Serialize> From<&InvokeOptions<C>> for InvokeOptionsInput {
+    impl<C: Serialize> From<&InvokeOptions<C>> for InvokeOptionsInput {
         fn from(opts: &InvokeOptions<C>) -> Self {
             InvokeOptionsInput {
                 function_arn: opts.function_arn.to_owned(),
@@ -281,7 +288,6 @@ pub mod mock {
     }
 
     impl MockHolder {
-
         pub fn with_invoke_sync_outputs(self, invoke_sync_outputs: Vec<GGResult<Vec<u8>>>) -> Self {
             MockHolder {
                 invoke_sync_outputs: RefCell::new(invoke_sync_outputs),
@@ -295,7 +301,6 @@ pub mod mock {
                 ..self
             }
         }
-
     }
 
     impl Default for MockHolder {
@@ -319,7 +324,6 @@ pub mod mock {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -329,12 +333,12 @@ mod test {
 
     #[derive(Serialize, Deserialize, Clone)]
     struct TestContext {
-        foo: String
+        foo: String,
     }
 
     #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
     struct TestPayload {
-        msg: String
+        msg: String,
     }
 
     //noinspection DuplicatedCode
@@ -346,21 +350,26 @@ mod test {
         let function_arn = "function_arn2323";
 
         let context = TestContext {
-            foo: "bar".to_string()
+            foo: "bar".to_string(),
         };
 
         let payload = TestPayload {
-            msg: "The message of my payload".to_owned()
+            msg: "The message of my payload".to_owned(),
         };
 
         let qualifier = "12121221";
 
         let payload_bytes = serde_json::to_vec(&payload).unwrap();
 
-        let options =
-            InvokeOptions::new(function_arn.to_owned(), context.clone(), qualifier.to_owned());
+        let options = InvokeOptions::new(
+            function_arn.to_owned(),
+            context.clone(),
+            qualifier.to_owned(),
+        );
 
-        LambdaClient::default().invoke_async(options, Some(payload_bytes.clone())).unwrap();
+        LambdaClient::default()
+            .invoke_async(options, Some(payload_bytes.clone()))
+            .unwrap();
 
         GG_INVOKE_ARGS.with(|rc| {
             let args = rc.borrow();
@@ -381,7 +390,7 @@ mod test {
     fn test_invoke_sync() {
         reset_test_state();
         let response = TestPayload {
-            msg: "This is the sync response!".to_owned()
+            msg: "This is the sync response!".to_owned(),
         };
         GG_REQUEST_READ_BUFFER.with(|rc| {
             let bytes = serde_json::to_vec(&response).unwrap();
@@ -391,22 +400,31 @@ mod test {
         let function_arn = "function_arn2323t867";
 
         let context = TestContext {
-            foo: "bark".to_string()
+            foo: "bark".to_string(),
         };
 
         let payload = TestPayload {
-            msg: "The message of my payloadkhkjb".to_owned()
+            msg: "The message of my payloadkhkjb".to_owned(),
         };
 
         let qualifier = "12121221";
 
         let payload_bytes = serde_json::to_vec(&payload).unwrap();
 
-        let options =
-            InvokeOptions::new(function_arn.to_owned(), context.clone(), qualifier.to_owned());
+        let options = InvokeOptions::new(
+            function_arn.to_owned(),
+            context.clone(),
+            qualifier.to_owned(),
+        );
 
-        let result: Vec<u8> = LambdaClient::default().invoke_sync(options, Some(payload_bytes.clone())).unwrap().unwrap();
-        assert_eq!(serde_json::from_slice::<TestPayload>(result.as_ref()).unwrap(), response);
+        let result: Vec<u8> = LambdaClient::default()
+            .invoke_sync(options, Some(payload_bytes.clone()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<TestPayload>(result.as_ref()).unwrap(),
+            response
+        );
 
         GG_INVOKE_ARGS.with(|rc| {
             let args = rc.borrow();
@@ -420,5 +438,4 @@ mod test {
         GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
     }
-
 }

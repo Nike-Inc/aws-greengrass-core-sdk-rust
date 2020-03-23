@@ -4,7 +4,7 @@
 //! ```rust
 //! use log::LevelFilter;
 //! use aws_greengrass_core_rust::log as gglog;
-//! use aws_greengrass_core_rust::client::IOTDataClient;
+//! use aws_greengrass_core_rust::iotdata::IOTDataClient;
 //! use aws_greengrass_core_rust::init;
 //!
 //! pub fn main() -> std::io::Result<()> {
@@ -17,9 +17,9 @@
 #![allow(unused_unsafe)] // because the test bindings will complain otherwise
 
 mod bindings;
-pub mod client;
 pub mod error;
 pub mod handler;
+pub mod iotdata;
 pub mod lambda;
 pub mod log;
 pub mod request;

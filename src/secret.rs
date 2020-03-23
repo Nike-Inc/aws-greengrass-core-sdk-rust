@@ -14,16 +14,11 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
 
-/// Handles requests to the SecretManager secrets
-/// that have been exposed to the green grass lambda
-///
-/// ```rust
-/// use aws_greengrass_core_rust::secret::Secret;
-///
-/// let secret_result = Secret::for_secret_id("mysecret")
-///     .with_secret_version(Some("version here".to_owned()))
-///     .request();
-/// ```
+#[cfg(all(test, feature = "mock"))]
+use self::mock::*;
+#[cfg(all(test, feature = "mock"))]
+use std::rc::Rc;
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Secret {
@@ -38,15 +33,9 @@ pub struct Secret {
 }
 
 impl Secret {
-    /// Creates a new SecretRequestBuilder using the specified secret_id
-    ///
-    /// * `secret_id` - The full arn or simple name of the secret
-    pub fn for_secret_id(secret_id: &str) -> SecretRequestBuilder {
-        SecretRequestBuilder::new(secret_id.to_owned())
-    }
-
     /// For testing purposes.
     /// Can be called with default() to provide a string value
+    #[cfg(test)]
     pub fn with_secret_string(self, secret_string: Option<String>) -> Self {
         Secret {
             secret_string,
@@ -55,23 +44,63 @@ impl Secret {
     }
 }
 
+/// Handles requests to the SecretManager secrets
+/// that have been exposed to the green grass lambda
+///
+/// ```rust
+/// use aws_greengrass_core_rust::secret::SecretClient;
+///
+/// let secret_result = SecretClient::default().for_secret_id("mysecret")
+///     .with_secret_version(Some("version here".to_owned()))
+///     .request();
+/// ```
+#[derive(Clone)]
+pub struct SecretClient {
+    #[cfg(all(test, feature = "mock"))]
+    pub mocks: Rc<MockHolder>,
+}
+
+impl SecretClient {
+    /// Creates a new SecretRequestBuilder using the specified secret_id
+    ///
+    /// * `secret_id` - The full arn or simple name of the secret
+    pub fn for_secret_id(&self, secret_id: &str) -> SecretRequestBuilder {
+        SecretRequestBuilder {
+            secret_id: secret_id.to_owned(),
+            secret_version: None,
+            secret_version_stage: None,
+            #[cfg(all(test, feature = "mock"))]
+            mocks: Rc::clone(&self.mocks),
+        }
+    }
+
+    /// Use the specified mock holder
+    #[cfg(all(test, feature = "mock"))]
+    pub fn with_mocks(self, mocks: Rc<MockHolder>) -> Self {
+        SecretClient { mocks, ..self }
+    }
+}
+
+impl Default for SecretClient {
+    fn default() -> Self {
+        SecretClient {
+            #[cfg(all(test, feature = "mock"))]
+            mocks: Rc::new(MockHolder::default()),
+        }
+    }
+}
+
 /// Used to construct a request to send to acquire a secret from Greengrass
+#[derive(Clone)]
 pub struct SecretRequestBuilder {
     pub secret_id: String,
     pub secret_version: Option<String>,
     pub secret_version_stage: Option<String>,
+    #[cfg(all(test, feature = "mock"))]
+    pub mocks: Rc<MockHolder>,
 }
 
 impl SecretRequestBuilder {
-    /// The full id or simple name of the secret
-    fn new(secret_id: String) -> Self {
-        SecretRequestBuilder {
-            secret_id,
-            secret_version: None,
-            secret_version_stage: None,
-        }
-    }
-
     /// Optional Secret version
     pub fn with_secret_version(self, secret_version: Option<String>) -> Self {
         SecretRequestBuilder {
@@ -89,6 +118,7 @@ impl SecretRequestBuilder {
     }
 
     /// Executes the request and returns the secret
+    #[cfg(not(all(test, feature = "mock")))]
     pub fn request(&self) -> GGResult<Option<Secret>> {
         if let Some(response) = read_secret(self)? {
             Ok(Some(self.parse_response(&response)?))
@@ -100,8 +130,23 @@ impl SecretRequestBuilder {
     fn parse_response(&self, response: &[u8]) -> GGResult<Secret> {
         serde_json::from_slice::<Secret>(response).map_err(GGError::from)
     }
-}
 
+    // -----------------------------------
+    // Mock methods
+    // -----------------------------------
+
+    #[cfg(all(test, feature = "mock"))]
+    pub fn request(&self) -> GGResult<Option<Secret>> {
+        log::warn!("Mock request is being executed!!! This should not happen in prod!!!!");
+        self.mocks.request_inputs.borrow_mut().push(self.clone());
+
+        if let Some(output) = Rc::clone(&self.mocks).request_outputs.borrow_mut().pop() {
+            output
+        } else {
+            Ok(Some(Secret::default()))
+        }
+    }
+}
 /// Fetch the specified secrete from the green grass secret store
 fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Option<Vec<u8>>> {
     unsafe {
@@ -139,6 +184,76 @@ fn read_secret(builder: &SecretRequestBuilder) -> GGResult<Option<Vec<u8>>> {
             let response = GGRequestResponse::try_from(&res)?;
             response.read(req)
         })
+    }
+}
+
+#[cfg(all(test, feature = "mock"))]
+mod mock {
+    use super::*;
+    use crate::secret::SecretRequestBuilder;
+    use std::cell::RefCell;
+
+    pub struct MockHolder {
+        pub request_inputs: RefCell<Vec<SecretRequestBuilder>>,
+        pub request_outputs: RefCell<Vec<GGResult<Option<Secret>>>>,
+    }
+
+    impl MockHolder {
+        pub fn with_request_outputs(self, request_outputs: Vec<GGResult<Option<Secret>>>) -> Self {
+            MockHolder {
+                request_outputs: RefCell::new(request_outputs),
+                ..self
+            }
+        }
+    }
+
+    impl Default for MockHolder {
+        fn default() -> Self {
+            MockHolder {
+                request_inputs: RefCell::new(vec![]),
+                // NOTE: We can't copy the outputs since result isn't cloneable, so just empty it
+                request_outputs: RefCell::new(vec![]),
+            }
+        }
+    }
+
+    // Note: This is to get past compile issues.. Mock testing for threads
+    // could result in undefined behavior
+    unsafe impl Send for MockHolder {}
+
+    unsafe impl Sync for MockHolder {}
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn test_mocks() {
+            let secret_id = "my secret 111";
+            let secret = Secret::default().with_secret_string(Some(secret_id.to_owned()));
+            let mocks = MockHolder::default().with_request_outputs(vec![Ok(Some(secret))]);
+
+            let client = SecretClient::default().with_mocks(Rc::new(mocks));
+
+            let result = client.for_secret_id(secret_id).request().unwrap().unwrap();
+            assert_eq!(result.secret_string.unwrap(), secret_id);
+        }
+
+        #[test]
+        fn test_mocks_err() {
+            let secret_id = "my secret 112";
+            let err_str = "Foo!";
+            let mocks = MockHolder::default()
+                .with_request_outputs(vec![Err(GGError::Unknown(err_str.to_owned()))]);
+
+            let client = SecretClient::default().with_mocks(Rc::new(mocks));
+
+            if let GGError::Unknown(msg) = client.for_secret_id(secret_id).request().unwrap_err() {
+                assert_eq!(msg, err_str);
+            } else {
+                panic!("wrong error type");
+            }
+        }
     }
 }
 
@@ -180,7 +295,11 @@ mod tests {
         reset_test_state();
         let secret_id = "my_secret_id";
         GG_REQUEST_READ_BUFFER.with(|rc| rc.replace(test_response().into_bytes()));
-        let secret = Secret::for_secret_id(secret_id).request().unwrap().unwrap();
+        let secret = SecretClient::default()
+            .for_secret_id(secret_id)
+            .request()
+            .unwrap()
+            .unwrap();
         let assert_secret_string = test_response();
         assert_eq!(
             secret,
@@ -200,7 +319,7 @@ mod tests {
         let error = gg_error_GGE_INVALID_STATE;
         GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(error));
         let secret_id = "failed_secret_id";
-        let secret = Secret::for_secret_id(secret_id).request();
+        let secret = SecretClient::default().for_secret_id(secret_id).request();
         assert!(secret.is_err());
         GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));

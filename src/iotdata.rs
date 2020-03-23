@@ -63,7 +63,7 @@ impl Default for PublishOptions {
 ///
 /// ## Basic Publishing
 /// ```rust
-/// use aws_greengrass_core_rust::client::IOTDataClient;
+/// use aws_greengrass_core_rust::iotdata::IOTDataClient;
 /// let client = IOTDataClient::default();
 /// if let Err(e) = client.publish("some_topic", r#"{"msg": "some payload"}"#) {
 ///     eprintln!("An error occurred publishing: {}", e);
@@ -72,7 +72,7 @@ impl Default for PublishOptions {
 ///
 /// ## Publishing with Options
 /// ```rust
-/// use aws_greengrass_core_rust::client::{PublishOptions, QueueFullPolicy, IOTDataClient};
+/// use aws_greengrass_core_rust::iotdata::{PublishOptions, QueueFullPolicy, IOTDataClient};
 /// let options = PublishOptions::default().with_queue_full_policy(QueueFullPolicy::AllOrError);
 /// let client = IOTDataClient::default().with_publish_options(Some(options));
 /// if let Err(e) = client.publish("some_topic", r#"{"msg": "some payload"}"#) {

@@ -1,6 +1,6 @@
 //! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
-use aws_greengrass_core_rust::client::IOTDataClient;
 use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+use aws_greengrass_core_rust::iotdata::IOTDataClient;
 use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::{Runtime, RuntimeOption};
 use aws_greengrass_core_rust::Initializer;

@@ -1,6 +1,6 @@
 //! This is a simple example that will just send a message to an MQTT topic when it is run.
-use aws_greengrass_core_rust::client::IOTDataClient;
 use aws_greengrass_core_rust::init;
+use aws_greengrass_core_rust::iotdata::IOTDataClient;
 use aws_greengrass_core_rust::log as gglog;
 use log::LevelFilter;
 

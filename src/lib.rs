@@ -17,9 +17,9 @@
 #![allow(unused_unsafe)] // because the test bindings will complain otherwise
 
 mod bindings;
-pub mod iotdata;
 pub mod error;
 pub mod handler;
+pub mod iotdata;
 pub mod lambda;
 pub mod log;
 pub mod request;

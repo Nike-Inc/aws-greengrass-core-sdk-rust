@@ -40,4 +40,4 @@ When the feature "mock" is turned during the test phase the various clients will
 ## Examples
 * [hello.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/hello.rs) - Simple example for initializing the greengrass runtime and sending a message on a topic
 * [echo.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/echo.rs) - Example that shows how to register a Handler with the greengrass runtime and listen for message.
-* [shadow.rs]()
+* [shadow.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/shadow.rs) - Example showing how to acquire and manipulate shadow documents.

@@ -19,7 +19,18 @@ Provides an idiomatic Rust API around the [AWS Greengrass Core C SDK](https://gi
 * Install the [Greengrass C SDK](https://github.com/aws/aws-greengrass-core-sdk-c) (fails on Mac OS X, see note below)
 * Install [Rust](https://www.rust-lang.org/)
 * A Device running green grass version v1.6 or newer
-* Greengrass group as described in the [Getting started with Amazon Greengrass](https://docs.aws.amazon.com/greengrass/latest/developerguide/gg-gs.html) 
+* Greengrass group as described in the [Getting started with Amazon Greengrass](https://docs.aws.amazon.com/greengrass/latest/developerguide/gg-gs.html)
+
+#### Note for Building on mac
+The C Greengrass SDK fails to build on Mac OS X. The stubs directory contains a simple stubbed version of the SDK that 
+can be used for compiling against Mac OS X.
+
+To Install:
+1. ```cd stubs```
+2. ```mkdir build && cd build```
+3. ```cmake ..```
+4. ```make```
+5. ```make install``` 
 
 ### Create new cargo project
 
@@ -138,17 +149,6 @@ When the feature "mock" is turned during the test phase the various clients will
 ```   
 
 ## Building from source
-
-#### Note for Building on mac
-The C Greengrass SDK fails to build on Mac OS X. The stubs directory contains a simple stubbed version of the SDK that 
-can be used for compiling against Mac OS X.
-
-To Install:
-1. ```cd stubs```
-2. ```mkdir build && cd build```
-3. ```cmake ..```
-4. ```make```
-5. ```make install```
 
 ## Building
 

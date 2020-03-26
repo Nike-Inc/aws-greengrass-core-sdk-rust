@@ -201,6 +201,10 @@ impl ChannelHolder {
 mod test {
     use super::*;
     use std::ffi::CString;
+    use crate::handler::{Handler, LambdaContext};
+    use crate::Initializer;
+    use std::time::Duration;
+    use crossbeam_channel::{Sender, bounded};
 
     #[test]
     fn test_build_context() {
@@ -225,5 +229,39 @@ mod test {
             assert_eq!(context.client_context, client_ctx);
             assert_eq!(context.message, my_message);
         }
+    }
+
+    #[derive(Clone)]
+    struct TestHandler {
+        sender: Sender<LambdaContext>
+    }
+
+    impl TestHandler {
+        fn new(sender: Sender<LambdaContext>) -> Self {
+            TestHandler {
+                sender
+            }
+        }
+    }
+
+    impl Handler for TestHandler {
+        fn handle(&self, ctx: LambdaContext) {
+            self.sender.send(ctx).expect("Could not send context");
+        }
+    }
+
+    #[cfg(not(feature = "mock"))]
+    #[test]
+    fn test_handler() {
+        reset_test_state();
+        let (sender, receiver) = bounded(1);
+        let handler = TestHandler::new(sender);
+        let runtime = Runtime::default().with_runtime_option(RuntimeOption::Sync).with_handler(Some(Box::new(handler.clone())));
+        Initializer::default().with_runtime(runtime).init().expect("Initialization failed");
+        let context = LambdaContext::new("my_function_arn".to_owned(), "my_context".to_owned(), b"my bytes".to_ascii_lowercase());
+        send_to_handler(context.clone());
+        // a long time out in order to ensure that it will succeed when testing with coverage
+        let ctx = receiver.recv_timeout(Duration::from_secs(120)).expect("Context was sent within the timeout period");
+        assert_eq!(ctx, context);
     }
 }

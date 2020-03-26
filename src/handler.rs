@@ -19,7 +19,7 @@
 //! ```
 
 /// Provides information around the the event that was received
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LambdaContext {
     /// The full lambda ARN
     pub function_arn: String,
@@ -45,4 +45,23 @@ impl LambdaContext {
 /// See [`aws_greengrass_core_rust::runtime::Runtime`] on registering handlers.
 pub trait Handler {
     fn handle(&self, ctx: LambdaContext);
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::handler::LambdaContext;
+
+    #[test]
+    fn test_new() {
+        let function_arn = "sdlkfjds";
+        let client_context = "asdfdfsafdsa";
+        let message = "asdjkdsfajl".as_bytes().to_vec();
+        let ctx = LambdaContext::new(function_arn.to_owned(), client_context.to_owned(), message.clone());
+        assert_eq!(&ctx.function_arn, function_arn);
+        assert_eq!(&ctx.client_context, client_context);
+        let cloned = ctx.message.to_owned();
+        assert_eq!(cloned, message.clone());
+    }
+
 }

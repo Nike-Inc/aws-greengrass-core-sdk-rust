@@ -18,16 +18,25 @@ pub use self::test::*;
 
 /// Provides stubbed testing versions of methods, etc that match greengrasssdk.h
 /// Useful for internal testing.
+/// All test that utilize this package must have a #[cfg(not(feature = "mock"))] or the build will fail.
 #[cfg(any(test, feature = "coverage"))]
 pub mod test {
     use crate::lambda::InvokeType;
     use base64;
     use std::cell::RefCell;
     use std::convert::TryFrom;
-    use std::ffi::CStr;
+    use std::ffi::{CStr, CString};
     use std::os::raw::c_void;
     use std::thread_local;
+    use std::sync::Mutex;
     use uuid::Uuid;
+    use lazy_static::lazy_static;
+    use crate::handler::LambdaContext;
+
+    lazy_static! {
+        // This could problems if more than than one test is accessing. Try to limit usage.
+        pub(crate) static ref GG_HANDLER: Mutex<gg_lambda_handler> = Mutex::new(None);
+    }
 
     // Thread locals used for testing
     thread_local! {
@@ -64,6 +73,8 @@ pub mod test {
         GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(gg_error_GGE_SUCCESS));
         GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| rc.replace(1515));
         GG_LOG_ARGS.with(|rc| rc.replace(vec![]));
+        let mut handler = GG_HANDLER.lock().unwrap();
+        *handler = None;
     }
 
     #[derive(Debug, Copy, Clone, Default)]
@@ -229,7 +240,27 @@ pub mod test {
         ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
 
     pub extern "C" fn gg_runtime_start(handler: gg_lambda_handler, opt: u32) -> gg_error {
+        let mut current_handler = GG_HANDLER.lock().unwrap();
+        *current_handler = handler;
         gg_error_GGE_SUCCESS
+    }
+
+    /// Sets up the GG_LAMBDA_HANDLER_READ_BUFFER and calls the registered c handler
+    pub(crate) fn send_to_handler(ctx: LambdaContext) {
+        let message = ctx.message.clone();
+        GG_LAMBDA_HANDLER_READ_BUFFER.with(|rc| rc.replace(message));
+        let locked = GG_HANDLER.lock().unwrap();
+        if let Some(handler) = *locked {
+            unsafe {
+                let function_arn_c = CString::new(ctx.function_arn).unwrap().into_raw();
+                let client_ctx_c = CString::new(ctx.client_context.as_str()).unwrap().into_raw();
+                let ctx_c = Box::new(gg_lambda_context {
+                    function_arn: function_arn_c,
+                    client_context: client_ctx_c,
+                });
+                handler(Box::into_raw(ctx_c));
+            }
+        }
     }
 
     pub extern "C" fn gg_lambda_handler_read(

@@ -31,11 +31,16 @@ pub mod test {
     use std::sync::Mutex;
     use uuid::Uuid;
     use lazy_static::lazy_static;
-    use crate::handler::LambdaContext;
+    use crate::runtime::EventContext;
 
+    // For things that won't work within a thread local. Attempt to use a thread local when possible
+    // since tests are run in parallel. Generally only stuff related to testing runtime package should be in here
+    // brecause the handlers are run in a separate thread
     lazy_static! {
         // This could problems if more than than one test is accessing. Try to limit usage.
         pub(crate) static ref GG_HANDLER: Mutex<gg_lambda_handler> = Mutex::new(None);
+        pub(crate) static ref GG_LAMBDA_HANDLER_RESPONSE: Mutex<Vec<u8>> = Mutex::new(vec![]);
+        pub(crate) static ref GG_LAMBDA_HANDLER_ERR_RESPONSE: Mutex<Vec<u8>> = Mutex::new(vec![]);
     }
 
     // Thread locals used for testing
@@ -73,8 +78,15 @@ pub mod test {
         GG_GET_SECRET_VALUE_RETURN.with(|rc| rc.replace(gg_error_GGE_SUCCESS));
         GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY.with(|rc| rc.replace(1515));
         GG_LOG_ARGS.with(|rc| rc.replace(vec![]));
-        let mut handler = GG_HANDLER.lock().unwrap();
+    }
+
+    pub(crate) fn reset_test_statics() {
+        let mut handler = GG_HANDLER.lock().expect("could not acquire lock on GG_HANDLER");
         *handler = None;
+        let mut handler_resp = GG_LAMBDA_HANDLER_RESPONSE.lock().expect("could not acquire lock on GG_LAMBDA_HANDLER_RESPONSE");
+        *handler_resp = vec![];
+        let mut handler_err_resp = GG_LAMBDA_HANDLER_ERR_RESPONSE.lock().expect("could not acquire lock on GG_LAMBDA_HANDLER_RESPONSE");
+        *handler_err_resp = vec![];
     }
 
     #[derive(Debug, Copy, Clone, Default)]
@@ -246,9 +258,9 @@ pub mod test {
     }
 
     /// Sets up the GG_LAMBDA_HANDLER_READ_BUFFER and calls the registered c handler
-    pub(crate) fn send_to_handler(ctx: LambdaContext) {
-        let message = ctx.message.clone();
-        GG_LAMBDA_HANDLER_READ_BUFFER.with(|rc| rc.replace(message));
+    pub(crate) fn send_to_handler(event_ctx: EventContext) {
+        let EventContext(event, ctx) = event_ctx;
+        GG_LAMBDA_HANDLER_READ_BUFFER.with(|rc| rc.replace(event));
         let locked = GG_HANDLER.lock().unwrap();
         if let Some(handler) = *locked {
             unsafe {

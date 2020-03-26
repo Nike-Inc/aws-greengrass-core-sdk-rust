@@ -50,12 +50,12 @@ pub enum GGRequestStatus {
     Again,
 }
 
-impl TryFrom<&gg_request_status> for GGRequestStatus {
+impl TryFrom<gg_request_status> for GGRequestStatus {
     type Error = GGError;
 
     #[allow(non_upper_case_globals)]
-    fn try_from(value: &gg_request_status) -> Result<Self, Self::Error> {
-        match *value {
+    fn try_from(value: gg_request_status) -> Result<Self, Self::Error> {
+        match value {
             gg_request_status_GG_REQUEST_SUCCESS => Ok(Self::Success),
             gg_request_status_GG_REQUEST_HANDLED => Ok(Self::Handled),
             gg_request_status_GG_REQUEST_UNHANDLED => Ok(Self::Unhandled),
@@ -170,7 +170,7 @@ impl TryFrom<&gg_request_result> for GGRequestResponse {
     type Error = GGError;
 
     fn try_from(value: &gg_request_result) -> Result<Self, Self::Error> {
-        let status = GGRequestStatus::try_from(&value.request_status)?;
+        let status = GGRequestStatus::try_from(value.request_status)?;
         Ok(GGRequestResponse {
             request_status: status,
             error_response: None,
@@ -278,4 +278,15 @@ Parturient montes nascetur ridiculus mus mauris vitae ultricies. Suspendisse sed
         assert!(!result.is_empty());
         assert_eq!(result, READ_DATA);
     }
+
+    #[test]
+    fn test_try_from_gg_request_status() {
+        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_SUCCESS).unwrap(), GGRequestStatus::Success);
+        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_HANDLED).unwrap(), GGRequestStatus::Handled);
+        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_UNHANDLED).unwrap(), GGRequestStatus::Unhandled);
+        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_UNKNOWN).unwrap(), GGRequestStatus::Unknown);
+        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_AGAIN).unwrap(), GGRequestStatus::Again);
+        assert!(GGRequestStatus::try_from(9999).is_err());
+    }
+
 }

@@ -1,7 +1,7 @@
 //! Provides error handling
 
 use crate::bindings::*;
-use crate::handler::LambdaContext;
+use crate::runtime::EventContext;
 use crate::request::GGRequestResponse;
 use crossbeam_channel::{RecvError, SendError};
 use serde_json::Error as SerdeError;
@@ -34,7 +34,7 @@ pub enum GGError {
     /// If receive an error type from the C API that isn't known
     Unknown(String),
     /// If there are issues in communicating to the Handler  
-    HandlerChannelSendError(SendError<LambdaContext>),
+    HandlerChannelSendError(SendError<EventContext>),
     /// If there are issues in communicating to the Handler  
     HandlerChannelRecvError(RecvError),
     /// If an AWS response contains an unauthorized error code
@@ -112,8 +112,8 @@ impl From<ffi::NulError> for GGError {
     }
 }
 
-impl From<SendError<LambdaContext>> for GGError {
-    fn from(e: SendError<LambdaContext>) -> Self {
+impl From<SendError<EventContext>> for GGError {
+    fn from(e: SendError<EventContext>) -> Self {
         GGError::HandlerChannelSendError(e)
     }
 }
@@ -145,6 +145,7 @@ impl From<SerdeError> for GGError {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn test_from_code() {
@@ -179,5 +180,14 @@ mod test {
             Err(GGError::Unknown(_)) => (),
             _ => panic!("Expected InternalFailure"),
         };
+    }
+
+    #[test]
+    fn test_serde_error() {
+        let result: Result<Value, GGError> = serde_json::from_str("sdflkasdf {d92").map_err(GGError::from);
+        assert!(result.is_err());
+        let unwrapped = result.unwrap_err();
+        assert!(unwrapped.source().is_some());
+        assert!(format!("{}", unwrapped).len() > 10);
     }
 }

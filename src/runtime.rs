@@ -1,12 +1,12 @@
 use crate::bindings::*;
 use crate::error::GGError;
-use crate::handler::{Handler, LambdaContext};
+use crate::handler::{Handler, LambdaContext, HandlerError, HandlerResult};
 use crate::GGResult;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use lazy_static::lazy_static;
-use log::{error, info};
+use log::{debug, error, info};
 use std::default::Default;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 use std::sync::Arc;
 use std::thread;
@@ -70,7 +70,10 @@ impl Runtime {
             let c_handler = if let Some(handler) = self.handler {
                 thread::spawn(move || loop {
                     match ChannelHolder::recv() {
-                        Ok(context) => handler.handle(context),
+                        Ok(channel_message) => {
+                            let EventContext(event, ctx) = channel_message;
+                            process_handler_result(handler.handle(event, ctx))
+                        },
                         Err(e) => error!("{}", e),
                     }
                 });
@@ -97,14 +100,15 @@ impl Runtime {
     /// Provide a handler. If no handler is provided the runtime will register a no-op handler
     ///
     /// ```rust
-    /// use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+    /// use aws_greengrass_core_rust::handler::{Handler, LambdaContext, HandlerResult};
     /// use aws_greengrass_core_rust::runtime::Runtime;
     ///
     /// struct MyHandler;
     ///
     /// impl Handler for MyHandler {
-    ///     fn handle(&self, ctx: LambdaContext) {
-    ///         // Do something here  
+    ///     fn handle(&self, event: Vec<u8>, ctx: LambdaContext) -> HandlerResult {
+    ///         // Do something here
+    ///         Ok(None)
     ///     }
     /// }
     ///
@@ -130,10 +134,11 @@ extern "C" fn delgating_handler(c_ctx: *const gg_lambda_context) {
             error!("{}", e);
         }
     }
+
 }
 
 /// Converts the c context to our rust native context
-unsafe fn build_context(c_ctx: *const gg_lambda_context) -> GGResult<LambdaContext> {
+unsafe fn build_context(c_ctx: *const gg_lambda_context) -> GGResult<EventContext> {
     let message = handler_read_message()?;
     let function_arn = CStr::from_ptr((*c_ctx).function_arn)
         .to_string_lossy()
@@ -143,7 +148,7 @@ unsafe fn build_context(c_ctx: *const gg_lambda_context) -> GGResult<LambdaConte
         .to_string_lossy()
         .to_owned()
         .to_string();
-    Ok(LambdaContext::new(function_arn, client_context, message))
+    Ok(EventContext(message, LambdaContext::new(function_arn, client_context)))
 }
 
 /// Wraps the C gg_lambda_handler_read call
@@ -169,11 +174,44 @@ unsafe fn handler_read_message() -> GGResult<Vec<u8>> {
     Ok(collected)
 }
 
+/// Processes the response we received from the Handler.handle method
+fn process_handler_result(result: HandlerResult) {
+    unsafe {
+        let result = match result {
+            Ok(Some(payload)) => write_lambda_response(&payload),
+            Ok(None) => {
+                debug!("No Handler response to send back to server");
+                Ok(())
+            },
+            Err(HandlerError(msg)) => write_lambda_err_response(&msg),
+        };
+        if let Err(e) = result {
+            error!("An error occurred while sending lambda response: {}", e);
+        }
+    }
+}
+
+unsafe fn write_lambda_response(buffer: &[u8]) -> GGResult<()> {
+    let buffer_c = buffer as *const _ as *const c_void;
+    let resp = gg_lambda_handler_write_response(buffer_c, buffer.len());
+    GGError::from_code(resp)
+}
+
+unsafe fn write_lambda_err_response(err_msg: &str) -> GGResult<()> {
+    let err_msg_c = CString::new(err_msg).map_err(GGError::from)?;
+    let resp = gg_lambda_handler_write_error(err_msg_c.as_ptr());
+    GGError::from_code(resp)
+}
+
+/// Represents the event payload/lambda context pair
+#[derive(Debug, Clone, PartialEq)]
+pub struct EventContext(pub Vec<u8>, pub LambdaContext);
+
 /// Wraps a Channel.
 /// This is mostly needed as there is no way to instantiate a static ref with a tuple (see CHANNEL above)
 struct ChannelHolder {
-    sender: Sender<LambdaContext>,
-    receiver: Receiver<LambdaContext>,
+    sender: Sender<EventContext>,
+    receiver: Receiver<EventContext>,
 }
 
 impl ChannelHolder {
@@ -184,7 +222,7 @@ impl ChannelHolder {
     }
 
     /// Performs a send with CHANNEL and coerces the error type
-    fn send(context: LambdaContext) -> GGResult<()> {
+    fn send(context: EventContext) -> GGResult<()> {
         Arc::clone(&CHANNEL)
             .sender
             .send(context)
@@ -192,7 +230,7 @@ impl ChannelHolder {
     }
 
     /// Performs a recv with CHANNEL and coerces the error type
-    fn recv() -> GGResult<LambdaContext> {
+    fn recv() -> GGResult<EventContext> {
         Arc::clone(&CHANNEL).receiver.recv().map_err(GGError::from)
     }
 }
@@ -201,7 +239,7 @@ impl ChannelHolder {
 mod test {
     use super::*;
     use std::ffi::CString;
-    use crate::handler::{Handler, LambdaContext};
+    use crate::handler::{Handler, LambdaContext, HandlerResult};
     use crate::Initializer;
     use std::time::Duration;
     use crossbeam_channel::{Sender, bounded};
@@ -209,8 +247,8 @@ mod test {
     #[test]
     fn test_build_context() {
         unsafe {
-            let my_message = b"My handlers message";
-            GG_LAMBDA_HANDLER_READ_BUFFER.with(|b| b.replace(my_message.to_owned().to_vec()));
+            let my_event = b"My handlers message";
+            GG_LAMBDA_HANDLER_READ_BUFFER.with(|b| b.replace(my_event.to_owned().to_vec()));
 
             let my_function_arn = "this is a function arn";
             let client_ctx = "this is my client context";
@@ -223,21 +261,20 @@ mod test {
                 client_context: client_ctx_c.as_ptr(),
             });
 
-            let context = build_context(Box::into_raw(lambda_context_c)).unwrap();
-
+            let EventContext(event, context) = build_context(Box::into_raw(lambda_context_c)).unwrap();
             assert_eq!(context.function_arn, my_function_arn);
             assert_eq!(context.client_context, client_ctx);
-            assert_eq!(context.message, my_message);
+            assert_eq!(event, my_event);
         }
     }
 
     #[derive(Clone)]
     struct TestHandler {
-        sender: Sender<LambdaContext>
+        sender: Sender<EventContext>
     }
 
     impl TestHandler {
-        fn new(sender: Sender<LambdaContext>) -> Self {
+        fn new(sender: Sender<EventContext>) -> Self {
             TestHandler {
                 sender
             }
@@ -245,23 +282,40 @@ mod test {
     }
 
     impl Handler for TestHandler {
-        fn handle(&self, ctx: LambdaContext) {
-            self.sender.send(ctx).expect("Could not send context");
+        fn handle(&self, event: Vec<u8>, ctx: LambdaContext) -> HandlerResult {
+            self.sender.send(EventContext(event.clone(), ctx))
+                .map(|_| {
+                    // echo back the content if there was any content
+                    // otherwise echo back nothing
+                    if event.is_empty() {
+                        None
+                    }
+                    else {
+                        Some(event)
+                    }
+                })
+                .map_err(|e| HandlerError(format!("{}", e)))
         }
     }
 
     #[cfg(not(feature = "mock"))]
     #[test]
     fn test_handler() {
-        reset_test_state();
+        reset_test_statics();
         let (sender, receiver) = bounded(1);
         let handler = TestHandler::new(sender);
         let runtime = Runtime::default().with_runtime_option(RuntimeOption::Sync).with_handler(Some(Box::new(handler.clone())));
         Initializer::default().with_runtime(runtime).init().expect("Initialization failed");
-        let context = LambdaContext::new("my_function_arn".to_owned(), "my_context".to_owned(), b"my bytes".to_ascii_lowercase());
-        send_to_handler(context.clone());
+        let event_ctx  = EventContext("my bytes".as_bytes().to_vec(), LambdaContext::new("my_function_arn".to_owned(), "my_context".to_owned()));
+        send_to_handler(event_ctx.clone());
         // a long time out in order to ensure that it will succeed when testing with coverage
-        let ctx = receiver.recv_timeout(Duration::from_secs(120)).expect("Context was sent within the timeout period");
-        assert_eq!(ctx, context);
+        let timeout = if cfg!(feature = "coverage") {
+            120
+        } else {
+            15
+        };
+
+        let ctx = receiver.recv_timeout(Duration::from_secs(timeout)).expect("Context was sent within the timeout period");
+        assert_eq!(ctx, event_ctx);
     }
 }

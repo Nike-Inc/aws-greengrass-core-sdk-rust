@@ -52,7 +52,7 @@ log = "^0.4"
 
 ```rust
 //! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
-use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+use aws_greengrass_core_rust::handler::{Handler, LambdaContext, HandlerResult};
 use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::{Runtime, RuntimeOption};
 use aws_greengrass_core_rust::Initializer;
@@ -62,8 +62,12 @@ use log::{error, info, LevelFilter};
 struct MyHandler;
 
 impl Handler for MyHandler {
-    fn handle(&self, ctx: LambdaContext) {
-        info!("Handler received: {:?}", ctx);        
+    fn handle(&self, event: Vec<u8>, ctx: LambdaContext) -> HandlerResult {
+        let msg = String::from_utf8(event)
+            .map_err(|e| HandlerError(format!("{}", e)))?;
+    
+        info("Received: {}", msg);
+        Ok(None)    
     }
 }
 

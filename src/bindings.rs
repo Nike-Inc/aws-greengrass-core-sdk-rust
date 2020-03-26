@@ -10,15 +10,15 @@
 //! improper c_types is ignored. This is do to the u128 issue described here: https://github.com/rust-lang/rust-bindgen/issues/1549
 //! dead_code is allowed, do to a number of things in the bindings not being used
 
-#[cfg(not(test))]
+#[cfg(all(not(test), not(feature = "coverage")))]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-#[cfg(test)]
+#[cfg(any(test, feature = "coverage"))]
 pub use self::test::*;
 
 /// Provides stubbed testing versions of methods, etc that match greengrasssdk.h
 /// Useful for internal testing.
-#[cfg(test)]
+#[cfg(any(test, feature = "coverage"))]
 pub mod test {
     use crate::lambda::InvokeType;
     use base64;
@@ -532,7 +532,7 @@ pub mod test {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "coverage")))]
 mod bindings_test {
     // This is to make sure binding tests are still run
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

@@ -141,3 +141,43 @@ impl From<SerdeError> for GGError {
         Self::JsonError(e)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_from_code() {
+        assert!(GGError::from_code(gg_error_GGE_SUCCESS).is_ok());
+
+        match GGError::from_code(gg_error_GGE_INTERNAL_FAILURE) {
+            Err(GGError::InternalFailure) => (),
+            _ => panic!("Expected InternalFailure"),
+        };
+
+        match GGError::from_code(gg_error_GGE_INVALID_PARAMETER) {
+            Err(GGError::InvalidParameter) => (),
+            _ => panic!("Expected InvalidParameter"),
+        };
+
+        match GGError::from_code(gg_error_GGE_INVALID_STATE) {
+            Err(GGError::InvalidState) => (),
+            _ => panic!("Expected InvalidState"),
+        };
+
+        match GGError::from_code(gg_error_GGE_TERMINATE) {
+            Err(GGError::Terminate) => (),
+            _ => panic!("Expected Terminate"),
+        };
+
+        match GGError::from_code(gg_error_GGE_OUT_OF_MEMORY) {
+            Err(GGError::OutOfMemory) => (),
+            _ => panic!("Expected InternalFailure"),
+        };
+
+        match GGError::from_code(999) {
+            Err(GGError::Unknown(_)) => (),
+            _ => panic!("Expected InternalFailure"),
+        };
+    }
+}

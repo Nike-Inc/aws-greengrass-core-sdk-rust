@@ -18,7 +18,7 @@ Provides an idiomatic Rust API around the [AWS Greengrass Core C SDK](https://gi
 
 * Install the [Greengrass C SDK](https://github.com/aws/aws-greengrass-core-sdk-c) (fails on Mac OS X, see note below)
 * Install [Rust](https://www.rust-lang.org/)
-* Install the [AWS Cli](https://aws.amazon.com/cli/)
+* Install the [AWS CLI](https://aws.amazon.com/cli/)
 * A Device running green grass version v1.6 or newer
 * Create and configure a Greengrass group as described in the [Getting started with Amazon Greengrass](https://docs.aws.amazon.com/greengrass/latest/developerguide/gg-gs.html)
 

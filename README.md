@@ -47,7 +47,9 @@ log = "^0.4"
  
 ### Edit main.rs 
 1. Initialize logging, greengrass runtime, and register a Handler
+
 [//]: <> ("Update from git url to version once published to crates.io")
+
 ```rust
 //! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
 use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
@@ -58,6 +60,7 @@ use log::{error, info, LevelFilter};
 
 // define a handler
 struct MyHandler;
+
 impl Handler for MyHandler {
     fn handle(&self, ctx: LambdaContext) {
         info!("Handler received: {:?}", ctx);        
@@ -183,5 +186,5 @@ grcov ./target/debug/ -s . -t html --llvm --branch --ignore-not-existing -o ./ta
 
 ### Coverage with [Jetbrains CLion](https://www.jetbrains.com/clion/)
 1. Create a run coverage named Test
-2. Set the command to be: _test --features coverage_
+2. Set the command to be: ```test --features coverage```
 3. Run with coverage

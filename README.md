@@ -54,40 +54,28 @@ log = "^0.4"
 [//]: <> ("Update from git url to version once published to crates.io")
 
 ```rust
-//! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
-use aws_greengrass_core_rust::handler::{Handler, LambdaContext, HandlerResult};
-use aws_greengrass_core_rust::log as gglog;
-use aws_greengrass_core_rust::runtime::{Runtime, RuntimeOption};
 use aws_greengrass_core_rust::Initializer;
-use log::{error, info, LevelFilter};
+use aws_greengrass_core_rust::log as gglog;
+use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+use log::{info, error, LevelFilter};
+use aws_greengrass_core_rust::runtime::Runtime;
 
-// define a handler
-struct MyHandler;
+struct HelloHandler;
 
-impl Handler for MyHandler {
-    fn handle(&self, event: Vec<u8>, ctx: LambdaContext) -> HandlerResult {
-        let msg = String::from_utf8(event)
-            .map_err(|e| HandlerError(format!("{}", e)))?;
-    
-        info("Received: {}", msg);
-        Ok(None)    
+impl Handler for HelloHandler {
+    fn handle(&self, ctx: LambdaContext) {
+        info!("Received context: {:#?}", ctx);
+        let msg = String::from_utf8(ctx.message).expect("Message was not a valid utf8 string");
+        info!("Received event: {}", msg);
     }
 }
 
-fn main() {
-    // initialize logging
-    gglog::init_log(LevelFilter::Debug);
-    info!("Starting gg_echo_handler");
-
-    // configure runtime
-    let runtime = Runtime::default()
-        // On-demand greengrass lambdas should use RuntimeOption::Sync
-        .with_runtime_option(RuntimeOption::Sync) 
-        .with_handler(Some(Box::new(MyHandler)));
-
-    // initialize greengrass
+pub fn main() {
+    gglog::init_log(LevelFilter::Info);
+    let runtime = Runtime::default().with_handler(Some(Box::new(HelloHandler)));
     if let Err(e) = Initializer::default().with_runtime(runtime).init() {
-        error!("green grass initialization error: {}", e)
+        error!("Initialization failed: {}", e);
+        std::process::exit(1);
     }
 }
 ```

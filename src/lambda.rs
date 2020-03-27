@@ -109,6 +109,23 @@ impl LambdaClient {
         invoke(&option, InvokeType::InvokeEvent, &payload).map(|_| ())
     }
 
+    /// Allows lambda functions that have been invoked by another lambda to send a response back
+    /// On success send Ok(P)
+    /// On Error send Err(String)
+    #[cfg(not(feature = "mock"))]
+    pub fn send_response(&self, result: Result<&[u8], &str>) -> GGResult<()> {
+        unsafe {
+            match result {
+                Ok(bytes) => write_lambda_response(bytes),
+                Err(e) => write_lambda_err_response(e),
+            }
+        }
+    }
+
+    // -----------------------------------
+    // Mock methods
+    // -----------------------------------
+
     #[cfg(all(test, feature = "mock"))]
     pub fn invoke_sync<C: Serialize, P: AsRef<[u8]>>(
         &self,
@@ -150,6 +167,22 @@ impl LambdaClient {
         } else {
             Ok(())
         }
+    }
+
+    #[cfg(all(test, feature = "mock"))]
+    pub fn send_response(&self, result: Result<&[u8], &str>) -> GGResult<()> {
+        log::warn!("Mock send_response is being executed!!! This should not happen in prod!!!!");
+        let r = result.map(|a| a.to_vec()).map_err(|s| s.to_owned());
+        self.mocks
+            .send_response_inputs
+            .borrow_mut()
+            .push(r);
+        if let Some(output) = self.mocks.send_response_outputs.borrow_mut().pop() {
+            output
+        } else {
+            Ok(())
+        }
+
     }
 
     /// When the mock feature is turned on this will contain captured inputs and return
@@ -250,6 +283,18 @@ fn invoke<C: Serialize, P: AsRef<[u8]>>(
     }
 }
 
+unsafe fn write_lambda_response(buffer: &[u8]) -> GGResult<()> {
+    let buffer_c = buffer as *const _ as *const c_void;
+    let resp = gg_lambda_handler_write_response(buffer_c, buffer.len());
+    GGError::from_code(resp)
+}
+
+unsafe fn write_lambda_err_response(err_msg: &str) -> GGResult<()> {
+    let err_msg_c = CString::new(err_msg).map_err(GGError::from)?;
+    let resp = gg_lambda_handler_write_error(err_msg_c.as_ptr());
+    GGError::from_code(resp)
+}
+
 /// Provides mock testing utilities
 #[cfg(all(test, feature = "mock"))]
 pub mod mock {
@@ -285,6 +330,8 @@ pub mod mock {
         pub invoke_sync_outputs: RefCell<Vec<GGResult<Vec<u8>>>>,
         pub invoke_async_inputs: RefCell<Vec<InvokeInput>>,
         pub invoke_async_outputs: RefCell<Vec<GGResult<()>>>,
+        pub send_response_inputs: RefCell<Vec<Result<Vec<u8>, String>>>,
+        pub send_response_outputs: RefCell<Vec<GGResult<()>>>,
     }
 
     impl MockHolder {
@@ -310,6 +357,8 @@ pub mod mock {
                 invoke_sync_outputs: RefCell::new(vec![]),
                 invoke_async_inputs: RefCell::new(vec![]),
                 invoke_async_outputs: RefCell::new(vec![]),
+                send_response_inputs: RefCell::new(vec![]),
+                send_response_outputs: RefCell::new(vec![]),
             }
         }
     }
@@ -319,11 +368,19 @@ pub mod mock {
             MockHolder {
                 invoke_sync_inputs: RefCell::new(self.invoke_sync_inputs.borrow().clone()),
                 invoke_async_inputs: RefCell::new(self.invoke_async_inputs.borrow().clone()),
+                send_response_inputs: RefCell::new(self.send_response_inputs.borrow().clone()),
                 invoke_sync_outputs: RefCell::new(vec![]),
                 invoke_async_outputs: RefCell::new(vec![]),
+                send_response_outputs: RefCell::new(vec![]),
             }
         }
     }
+
+    // Note: This is to get past compile issues.. Mock testing for threads
+    // could result in undefined behavior
+    unsafe impl Send for MockHolder {}
+
+    unsafe impl Sync for MockHolder {}
 }
 
 #[cfg(test)]
@@ -438,4 +495,26 @@ mod test {
         GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
     }
+
+    #[test]
+    #[cfg(not(feature = "mock"))]
+    fn test_send_response() {
+        let my_succesful_response = b"response is here";
+        LambdaClient::default().send_response(Ok(my_succesful_response)).unwrap();
+        GG_LAMBDA_HANDLER_WRITE_RESPONSE.with(|rc| {
+            assert_eq!(*rc.borrow(), my_succesful_response);
+        });
+    }
+
+    #[test]
+    #[cfg(not(feature = "mock"))]
+    fn test_send_err_response() {
+        let my_err_response = "error response is here";
+        LambdaClient::default().send_response(Err(my_err_response)).unwrap();
+        GG_LAMBDA_HANDLER_WRITE_ERROR.with(|rc| {
+            assert_eq!(*rc.borrow(), my_err_response);
+        });
+    }
+
+
 }

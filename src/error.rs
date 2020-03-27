@@ -1,8 +1,8 @@
 //! Provides error handling
 
 use crate::bindings::*;
-use crate::handler::LambdaContext;
 use crate::request::GGRequestResponse;
+use crate::handler::LambdaContext;
 use crossbeam_channel::{RecvError, SendError};
 use serde_json::Error as SerdeError;
 use std::convert::From;
@@ -12,6 +12,7 @@ use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
+use log::error;
 
 /// Provices a wrapper for the various errors that are incurred both working with the
 /// GreenGrass C SDK directly or from the content of the results from it's responses (e.g. http status codes in json response objects)
@@ -59,7 +60,10 @@ impl GGError {
             gg_error_GGE_INVALID_STATE => Err(Self::InvalidState),
             gg_error_GGE_INTERNAL_FAILURE => Err(Self::InternalFailure),
             gg_error_GGE_TERMINATE => Err(Self::Terminate),
-            _ => Err(Self::Unknown(format!("Unknown error code: {}", err_code))),
+            _ => {
+                error!("Received unknown error code: {}", err_code);
+                Err(Self::Unknown(format!("Unknown error code: {}", err_code)))
+            },
         }
     }
 
@@ -145,6 +149,7 @@ impl From<SerdeError> for GGError {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn test_from_code() {
@@ -179,5 +184,14 @@ mod test {
             Err(GGError::Unknown(_)) => (),
             _ => panic!("Expected InternalFailure"),
         };
+    }
+
+    #[test]
+    fn test_serde_error() {
+        let result: Result<Value, GGError> = serde_json::from_str("sdflkasdf {d92").map_err(GGError::from);
+        assert!(result.is_err());
+        let unwrapped = result.unwrap_err();
+        assert!(unwrapped.source().is_some());
+        assert!(format!("{}", unwrapped).len() > 10);
     }
 }

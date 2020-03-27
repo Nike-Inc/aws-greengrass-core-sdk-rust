@@ -2,16 +2,29 @@
 //!
 //! # Quick Start
 //! ```rust
-//! use log::LevelFilter;
+//! use aws_greengrass_core_rust::Initializer;
 //! use aws_greengrass_core_rust::log as gglog;
-//! use aws_greengrass_core_rust::iotdata::IOTDataClient;
-//! use aws_greengrass_core_rust::init;
+//! use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+//! use log::{info, error, LevelFilter};
+//! use aws_greengrass_core_rust::runtime::Runtime;
 //!
-//! pub fn main() -> std::io::Result<()> {
+//! struct HelloHandler;
+//!
+//! impl Handler for HelloHandler {
+//!     fn handle(&self, ctx: LambdaContext) {
+//!         info!("Received context: {:#?}", ctx);
+//!         let msg = String::from_utf8(ctx.message).expect("Message was not a valid utf8 string");
+//!         info!("Received event: {}", msg);
+//!     }
+//! }
+//!
+//! pub fn main() {
 //!     gglog::init_log(LevelFilter::Info);
-//!     init().map_err(|e| e.as_ioerror());
-//!     let _result = IOTDataClient::default().publish("mytopic", r#"{"msg": "foo"}"#).map_err(|e| e.as_ioerror());
-//!     Ok(())
+//!     let runtime = Runtime::default().with_handler(Some(Box::new(HelloHandler)));
+//!     if let Err(e) = Initializer::default().with_runtime(runtime).init() {
+//!         error!("Initialization failed: {}", e);
+//!         std::process::exit(1);
+//!     }
 //! }
 //! ```
 #![allow(unused_unsafe)] // because the test bindings will complain otherwise
@@ -124,3 +137,4 @@ pub mod test {
         }
     }
 }
+

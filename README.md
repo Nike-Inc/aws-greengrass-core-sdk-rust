@@ -12,6 +12,9 @@ Provides an idiomatic Rust wrapper around the [AWS Greengrass Core C SDK](https:
 * [echo.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/echo.rs) - Example that shows how to register a Handler with the greengrass runtime and listen for message.
 * [shadow.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/shadow.rs) - Example showing how to acquire and manipulate shadow documents.
 
+### Building examples
+Examples can be built following the directions in Quick start. Use ```cargo build --example <example>``` to build. 
+
 ## Quickstart
 
 ### Prerequisites and Requirements
@@ -51,36 +54,28 @@ log = "^0.4"
 [//]: <> ("Update from git url to version once published to crates.io")
 
 ```rust
-//! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
-use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
-use aws_greengrass_core_rust::log as gglog;
-use aws_greengrass_core_rust::runtime::{Runtime, RuntimeOption};
 use aws_greengrass_core_rust::Initializer;
-use log::{error, info, LevelFilter};
+use aws_greengrass_core_rust::log as gglog;
+use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+use log::{info, error, LevelFilter};
+use aws_greengrass_core_rust::runtime::Runtime;
 
-// define a handler
-struct MyHandler;
+struct HelloHandler;
 
-impl Handler for MyHandler {
+impl Handler for HelloHandler {
     fn handle(&self, ctx: LambdaContext) {
-        info!("Handler received: {:?}", ctx);        
+        info!("Received context: {:#?}", ctx);
+        let msg = String::from_utf8(ctx.message).expect("Message was not a valid utf8 string");
+        info!("Received event: {}", msg);
     }
 }
 
-fn main() {
-    // initialize logging
-    gglog::init_log(LevelFilter::Debug);
-    info!("Starting gg_echo_handler");
-
-    // configure runtime
-    let runtime = Runtime::default()
-        // On-demand greengrass lambdas should use RuntimeOption::Sync
-        .with_runtime_option(RuntimeOption::Sync) 
-        .with_handler(Some(Box::new(MyHandler)));
-
-    // initialize greengrass
+pub fn main() {
+    gglog::init_log(LevelFilter::Info);
+    let runtime = Runtime::default().with_handler(Some(Box::new(HelloHandler)));
     if let Err(e) = Initializer::default().with_runtime(runtime).init() {
-        error!("green grass initialization error: {}", e)
+        error!("Initialization failed: {}", e);
+        std::process::exit(1);
     }
 }
 ```
@@ -90,6 +85,12 @@ fn main() {
 cargo build --release
 zip  zip -j my_gg_lambda.zip "./target/release/my_gg_lambda"
 ```
+
+Note: The binaries must be built on the operating system and architecture you are deploying to. If you are not on linux (Mac OS/windows) you can use the docker build:
+```./dockerbuild.sh cargo build```
+
+This will only work for x86 builds. 
+
 
 ### Deploy your lambda function
 Using the information you used when creating your Greengrass group:
@@ -157,6 +158,10 @@ When the feature "mock" is turned during the test phase the various clients will
 ## Building
 
 1. ```cargo build```
+
+## Testing Mock feature
+The examples will not build appropriately when the mock feature is enabled. To run the tests you must skip the examples:
+```cargo test --features mock --lib```
 
 ## Testing with code coverage
 

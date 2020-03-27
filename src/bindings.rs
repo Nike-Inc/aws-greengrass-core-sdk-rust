@@ -1,5 +1,5 @@
 #![allow(dead_code, improper_ctypes, unused_variables, non_upper_case_globals, non_camel_case_types,
-    non_snake_case, clippy::all)]
+non_snake_case, clippy::all)]
 //! This module encapsulates the bindings for the C library
 //! The bindings are regenerated on build on every build.
 //! For testing we do two things
@@ -56,6 +56,8 @@ pub mod test {
         pub(crate) static GG_INVOKE_ARGS: RefCell<GGInvokeArgs> = RefCell::new(GGInvokeArgs::default());
         pub(crate) static GG_PUBLISH_OPTIONS_SET_QUEUE_FULL_POLICY: RefCell<gg_queue_full_policy_options> = RefCell::new(1515);
         pub(crate) static GG_LOG_ARGS: RefCell<Vec<LogArgs>> = RefCell::new(vec![]);
+        pub(crate) static GG_LAMBDA_HANDLER_WRITE_RESPONSE: RefCell<Vec<u8>> = RefCell::new(vec![]);
+        pub(crate) static GG_LAMBDA_HANDLER_WRITE_ERROR: RefCell<String> = RefCell::new("".to_owned());
     }
 
     pub fn reset_test_state() {
@@ -114,13 +116,13 @@ pub mod test {
     pub type gg_error = u32;
 
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_BEST_EFFORT:
-        gg_queue_full_policy_options = 0;
+    gg_queue_full_policy_options = 0;
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR:
-        gg_queue_full_policy_options = 1;
+    gg_queue_full_policy_options = 1;
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_MAX:
-        gg_queue_full_policy_options = 2;
+    gg_queue_full_policy_options = 2;
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_PAD:
-        gg_queue_full_policy_options = 2147483647;
+    gg_queue_full_policy_options = 2147483647;
 
     pub type gg_queue_full_policy_options = u32;
 
@@ -237,7 +239,7 @@ pub mod test {
     }
 
     pub type gg_lambda_handler =
-        ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
+    ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
 
     pub extern "C" fn gg_runtime_start(handler: gg_lambda_handler, opt: u32) -> gg_error {
         let mut current_handler = GG_HANDLER.lock().unwrap();
@@ -301,12 +303,26 @@ pub mod test {
         response: *const ::std::os::raw::c_void,
         response_size: usize,
     ) -> gg_error {
+        GG_LAMBDA_HANDLER_WRITE_RESPONSE.with(|rc| {
+            unsafe {
+                let mut dst: Vec<u8> = Vec::with_capacity(response_size);
+                dst.set_len(response_size);
+                std::ptr::copy(response as *const u8, dst.as_mut_ptr(), response_size);
+                rc.replace(dst);
+            }
+        });
         gg_error_GGE_SUCCESS
     }
 
     pub extern "C" fn gg_lambda_handler_write_error(
         error_message: *const ::std::os::raw::c_char,
     ) -> gg_error {
+        GG_LAMBDA_HANDLER_WRITE_ERROR.with(|rc| {
+            unsafe {
+                let msg = CStr::from_ptr(error_message).to_owned().into_string().unwrap();
+                rc.replace(msg);
+            }
+        });
         gg_error_GGE_SUCCESS
     }
 
@@ -408,7 +424,7 @@ pub mod test {
                             .to_owned()
                             .into_bytes(),
                     )
-                    .unwrap(),
+                        .unwrap(),
                     qualifier: CStr::from_ptr((*opts).qualifier)
                         .to_owned()
                         .into_string()
@@ -568,3 +584,4 @@ mod bindings_test {
     // This is to make sure binding tests are still run
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
+

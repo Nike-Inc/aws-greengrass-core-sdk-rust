@@ -4,3 +4,4 @@ Cargo.lock
 /stubs/build
 **/*.vscode
 .idea
+.dockercache

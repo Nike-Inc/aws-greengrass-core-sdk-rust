@@ -104,7 +104,7 @@ impl Runtime {
     ///
     /// impl Handler for MyHandler {
     ///     fn handle(&self, ctx: LambdaContext) {
-    ///         // Do something here  
+    ///         // Do something here
     ///     }
     /// }
     ///
@@ -265,3 +265,4 @@ mod test {
         assert_eq!(ctx, context);
     }
 }
+

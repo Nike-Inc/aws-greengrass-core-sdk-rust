@@ -1,8 +1,8 @@
 //! Provides error handling
 
 use crate::bindings::*;
-use crate::runtime::EventContext;
 use crate::request::GGRequestResponse;
+use crate::handler::LambdaContext;
 use crossbeam_channel::{RecvError, SendError};
 use serde_json::Error as SerdeError;
 use std::convert::From;
@@ -12,6 +12,7 @@ use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
+use log::error;
 
 /// Provices a wrapper for the various errors that are incurred both working with the
 /// GreenGrass C SDK directly or from the content of the results from it's responses (e.g. http status codes in json response objects)
@@ -34,7 +35,7 @@ pub enum GGError {
     /// If receive an error type from the C API that isn't known
     Unknown(String),
     /// If there are issues in communicating to the Handler  
-    HandlerChannelSendError(SendError<EventContext>),
+    HandlerChannelSendError(SendError<LambdaContext>),
     /// If there are issues in communicating to the Handler  
     HandlerChannelRecvError(RecvError),
     /// If an AWS response contains an unauthorized error code
@@ -59,7 +60,10 @@ impl GGError {
             gg_error_GGE_INVALID_STATE => Err(Self::InvalidState),
             gg_error_GGE_INTERNAL_FAILURE => Err(Self::InternalFailure),
             gg_error_GGE_TERMINATE => Err(Self::Terminate),
-            _ => Err(Self::Unknown(format!("Unknown error code: {}", err_code))),
+            _ => {
+                error!("Received unknown error code: {}", err_code);
+                Err(Self::Unknown(format!("Unknown error code: {}", err_code)))
+            },
         }
     }
 
@@ -112,8 +116,8 @@ impl From<ffi::NulError> for GGError {
     }
 }
 
-impl From<SendError<EventContext>> for GGError {
-    fn from(e: SendError<EventContext>) -> Self {
+impl From<SendError<LambdaContext>> for GGError {
+    fn from(e: SendError<LambdaContext>) -> Self {
         GGError::HandlerChannelSendError(e)
     }
 }

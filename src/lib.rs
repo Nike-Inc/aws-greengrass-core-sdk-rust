@@ -4,19 +4,17 @@
 //! ```rust
 //! use aws_greengrass_core_rust::Initializer;
 //! use aws_greengrass_core_rust::log as gglog;
-//! use aws_greengrass_core_rust::handler::{Handler, LambdaContext, HandlerResult, HandlerError};
+//! use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
 //! use log::{info, error, LevelFilter};
 //! use aws_greengrass_core_rust::runtime::Runtime;
 //!
 //! struct HelloHandler;
 //!
 //! impl Handler for HelloHandler {
-//!     fn handle(&self, event: Vec<u8>, _: LambdaContext) -> HandlerResult {
-//!         let msg = String::from_utf8(event)
-//!             .map_err(|e| HandlerError(format!("{}", e)))?;
-//!         info!("Received: {}", msg);
-//!         let reply = format!("Hello! {}", msg);
-//!         Ok(Some(reply.into_bytes()))
+//!     fn handle(&self, ctx: LambdaContext) {
+//!         info!("Received context: {:#?}", ctx);
+//!         let msg = String::from_utf8(ctx.message).expect("Message was not a valid utf8 string");
+//!         info!("Received event: {}", msg);
 //!     }
 //! }
 //!
@@ -89,6 +87,11 @@ impl Default for Initializer {
     }
 }
 
+/// Initialize the Greengrass runtime without a handler
+pub fn init() -> GGResult<()> {
+    Initializer::default().init()
+}
+
 #[cfg(test)]
 pub mod test {
     use std::cell::{Ref, RefCell};
@@ -134,3 +137,4 @@ pub mod test {
         }
     }
 }
+

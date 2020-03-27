@@ -24,7 +24,7 @@
 use crate::bindings::*;
 use crate::error::GGError;
 use crate::GGResult;
-use log::error;
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::default::Default;
@@ -120,27 +120,38 @@ impl GGRequestResponse {
     /// If the response is an error, return it as Some(GGError)
     /// None if it isn't an error
     fn determine_error(&self, req: gg_request) -> ErrorState {
-        if self.is_error() {
-            // If this is an error than try to read the response body
-            // So we can see what kind of error it is
-            let read_result =
-                read_response_data(req).and_then(|e| ErrorResponse::try_from(e.as_slice()));
-            match read_result {
-                Ok(err_resp) => match err_resp.code {
-                    404 => ErrorState::NotFoundError,
-                    401 => ErrorState::Error(GGError::Unauthorized(err_resp.message)),
-                    _ => ErrorState::Error(GGError::ErrorResponse(self.clone())),
-                },
-                Err(e) => {
-                    error!(
-                        "Error trying to read error response for response: {:?} error: {}",
-                        self, e
-                    );
-                    ErrorState::Error(e)
-                }
+        // If we know there isn't an error, return
+        if !self.is_error() {
+            return ErrorState::None;
+        }
+
+        // If this is an error than try to read the response body
+        // So we can see what kind of error it is
+        let response_data = match read_response_data(req) {
+            // if the error response is empty we could have an UNKNOWN response
+            // which might not be an error at all.
+            // This best we can do is log
+            Ok(data) if data.is_empty() => {
+                warn!("Could not find an error response for non Success request of {:?}", self.request_status);
+                return ErrorState::None
+            },
+            Ok(data) => data,
+            Err(e) => {
+                error!("An error occurred attempting to read error response data: {}", e);
+                return ErrorState::Error(e)
             }
-        } else {
-            ErrorState::None
+        };
+
+        let err_resp = match ErrorResponse::try_from(response_data.as_slice()) {
+            Ok(resp) => resp,
+            // A parsing error occurred
+            Err(e) => return ErrorState::Error(e)
+        };
+
+         match err_resp.code {
+            404 => ErrorState::NotFoundError,
+            401 => ErrorState::Error(GGError::Unauthorized(err_resp.message)),
+            _ => ErrorState::Error(GGError::ErrorResponse(self.clone())),
         }
     }
 }
@@ -193,7 +204,11 @@ impl TryFrom<&[u8]> for ErrorResponse {
     type Error = GGError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        serde_json::from_slice(value).map_err(Self::Error::from)
+        serde_json::from_slice(value).map_err(|e| {
+            let s = String::from_utf8_lossy(value);
+            error!("Error trying to parse error response of {}", s);
+            Self::Error::from(e)
+        })
     }
 }
 
@@ -288,5 +303,4 @@ Parturient montes nascetur ridiculus mus mauris vitae ultricies. Suspendisse sed
         assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_AGAIN).unwrap(), GGRequestStatus::Again);
         assert!(GGRequestStatus::try_from(9999).is_err());
     }
-
 }

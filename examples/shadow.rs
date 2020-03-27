@@ -37,7 +37,7 @@
 //!     }
 //! }```
 use aws_greengrass_core_rust::error::GGError;
-use aws_greengrass_core_rust::handler::{Handler, LambdaContext, HandlerResult};
+use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
 use aws_greengrass_core_rust::iotdata::IOTDataClient;
 use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::Runtime;
@@ -186,18 +186,19 @@ impl ShadowHandler {
 }
 
 impl Handler for ShadowHandler {
-    fn handle(&self, event: Vec<u8>, _: LambdaContext) -> HandlerResult {
-        if let Err(e) = self.do_stuff_with_thing(&event) {
+    fn handle(&self, ctx: LambdaContext) {
+        if let Err(e) = self.do_stuff_with_thing(&ctx.message) {
             error!("Error calling shadows api: {}", e);
         }
-        Ok(None)
     }
 }
 
 fn main() {
     gglog::init_log(LevelFilter::Debug);
     info!("Starting shadow gg lambda");
+
     let runtime = Runtime::default().with_handler(Some(Box::new(ShadowHandler::new())));
+
     if let Err(e) = Initializer::default().with_runtime(runtime).init() {
         error!("green grass initialization error: {}", e)
     }

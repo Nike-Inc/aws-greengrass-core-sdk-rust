@@ -1,5 +1,5 @@
 //! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
-use aws_greengrass_core_rust::handler::{Handler, LambdaContext, HandlerResult};
+use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
 use aws_greengrass_core_rust::iotdata::IOTDataClient;
 use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::{Runtime, RuntimeOption};
@@ -13,14 +13,13 @@ const SEND_TOPIC: &str = "gg_echo_lambda/device-sent";
 struct EchoHandler;
 
 impl Handler for EchoHandler {
-    fn handle(&self, event: Vec<u8>, ctx: LambdaContext) -> HandlerResult {
+    fn handle(&self, ctx: LambdaContext) {
         info!("Handler received: {:?}", ctx);
-        let message = String::from_utf8_lossy(event.as_slice());
+        let message = String::from_utf8_lossy(ctx.message.as_slice());
         info!("Message: {}", message);
-        if let Err(e) = IOTDataClient::default().publish(SEND_TOPIC, &event.clone()) {
+        if let Err(e) = IOTDataClient::default().publish(SEND_TOPIC, ctx.message.clone()) {
             error!("Error sending {} to topic {} -- {}", message, SEND_TOPIC, e);
         }
-        Ok(None)
     }
 }
 

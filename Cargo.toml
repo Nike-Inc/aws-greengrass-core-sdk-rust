@@ -27,3 +27,6 @@ uuid = {version = "0.8", features = ["v4"], optional = true }
 
 [dev-dependencies]
 uuid = {version = "0.8", features = ["v4"] }
+hyper = "0.13"
+tokio = { version = "0.2", features = ["full"] }
+futures = "0.3"

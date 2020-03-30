@@ -11,6 +11,8 @@ Provides an idiomatic Rust wrapper around the [AWS Greengrass Core C SDK](https:
 * [hello.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/hello.rs) - Simple example for initializing the greengrass runtime and sending a message on a topic
 * [echo.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/echo.rs) - Example that shows how to register a Handler with the greengrass runtime and listen for message.
 * [shadow.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/blob/master/examples/shadow.rs) - Example showing how to acquire and manipulate shadow documents.
+* [longlived.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/tree/master/examples/longlived.rs) - Example showing how to create a longlived greengrass lambda that exposes a http endpoint.
+* [invoker.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/tree/master/examples/longlived.rs) - An example of invoking one lambda for another lambda. Should be used with [invokee.rs](https://github.nike.com/SensorsPlatform/aws-greengrass-core-sdk-rust/tree/master/examples/invokee.rs)
 
 ### Building examples
 Examples can be built following the directions in Quick start. Use ```cargo build --example <example>``` to build. 

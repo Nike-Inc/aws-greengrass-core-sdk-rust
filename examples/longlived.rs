@@ -8,13 +8,13 @@
 //! ```shell script
 //! curl -vvvv -H "Content-Type: application/json" -d '{"msg": "hello"}' http://127.0.0.1:5020/
 //! ```
-use aws_greengrass_core_rust::{Initializer, GGResult};
+use aws_greengrass_core_rust::iotdata::IOTDataClient;
 use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::{Runtime, RuntimeOption};
-use log::{info, error, LevelFilter};
+use aws_greengrass_core_rust::{GGResult, Initializer};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use aws_greengrass_core_rust::iotdata::IOTDataClient;
+use log::{error, info, LevelFilter};
 
 const SEND_TOPIC: &str = "longlived/device-sent";
 
@@ -36,7 +36,7 @@ async fn serve(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
                     Ok(internal_error)
                 }
             }
-        },
+        }
 
         // Return the 404 Not Found for other routes.
         _ => {
@@ -60,12 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Initialize Greengrass, long lived functions need to be configured with RuntimeOption::Async
     let runtime = Runtime::default().with_runtime_option(RuntimeOption::Async);
-    Initializer::default()
-        .with_runtime(runtime)
-        .init()?;
+    Initializer::default().with_runtime(runtime).init()?;
 
     // Initialize hyper
-    let addr = ([0,0,0,0], 5020).into();
+    let addr = ([0, 0, 0, 0], 5020).into();
     let service = make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(serve)) });
     let server = Server::bind(&addr).serve(service);
     info!("Listening on http://{}", addr);

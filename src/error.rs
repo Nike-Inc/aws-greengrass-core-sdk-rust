@@ -1,9 +1,10 @@
 //! Provides error handling
 
 use crate::bindings::*;
-use crate::request::GGRequestResponse;
 use crate::handler::LambdaContext;
+use crate::request::GGRequestResponse;
 use crossbeam_channel::{RecvError, SendError};
+use log::error;
 use serde_json::Error as SerdeError;
 use std::convert::From;
 use std::convert::Into;
@@ -12,7 +13,6 @@ use std::ffi;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::string::FromUtf8Error;
-use log::error;
 
 /// Provices a wrapper for the various errors that are incurred both working with the
 /// GreenGrass C SDK directly or from the content of the results from it's responses (e.g. http status codes in json response objects)
@@ -63,7 +63,7 @@ impl GGError {
             _ => {
                 error!("Received unknown error code: {}", err_code);
                 Err(Self::Unknown(format!("Unknown error code: {}", err_code)))
-            },
+            }
         }
     }
 
@@ -188,7 +188,8 @@ mod test {
 
     #[test]
     fn test_serde_error() {
-        let result: Result<Value, GGError> = serde_json::from_str("sdflkasdf {d92").map_err(GGError::from);
+        let result: Result<Value, GGError> =
+            serde_json::from_str("sdflkasdf {d92").map_err(GGError::from);
         assert!(result.is_err());
         let unwrapped = result.unwrap_err();
         assert!(unwrapped.source().is_some());

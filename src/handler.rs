@@ -47,7 +47,6 @@ pub trait Handler {
     fn handle(&self, ctx: LambdaContext);
 }
 
-
 #[cfg(test)]
 mod test {
     use crate::handler::LambdaContext;
@@ -57,11 +56,14 @@ mod test {
         let function_arn = "sdlkfjds";
         let client_context = "asdfdfsafdsa";
         let message = "asdjkdsfajl".as_bytes().to_vec();
-        let ctx = LambdaContext::new(function_arn.to_owned(), client_context.to_owned(), message.clone());
+        let ctx = LambdaContext::new(
+            function_arn.to_owned(),
+            client_context.to_owned(),
+            message.clone(),
+        );
         assert_eq!(&ctx.function_arn, function_arn);
         assert_eq!(&ctx.client_context, client_context);
         let cloned = ctx.message.to_owned();
         assert_eq!(cloned, message.clone());
     }
-
 }

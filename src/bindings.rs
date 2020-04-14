@@ -21,17 +21,17 @@ pub use self::test::*;
 /// All test that utilize this package must have a #[cfg(not(feature = "mock"))] or the build will fail.
 #[cfg(any(test, feature = "coverage"))]
 pub mod test {
+    use crate::handler::LambdaContext;
     use crate::lambda::InvokeType;
     use base64;
+    use lazy_static::lazy_static;
     use std::cell::RefCell;
     use std::convert::TryFrom;
     use std::ffi::{CStr, CString};
     use std::os::raw::c_void;
-    use std::thread_local;
     use std::sync::Mutex;
+    use std::thread_local;
     use uuid::Uuid;
-    use lazy_static::lazy_static;
-    use crate::handler::LambdaContext;
 
     lazy_static! {
         // This could problems if more than than one test is accessing. Try to limit usage.
@@ -116,13 +116,13 @@ pub mod test {
     pub type gg_error = u32;
 
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_BEST_EFFORT:
-    gg_queue_full_policy_options = 0;
+        gg_queue_full_policy_options = 0;
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_ALL_OR_ERROR:
-    gg_queue_full_policy_options = 1;
+        gg_queue_full_policy_options = 1;
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_MAX:
-    gg_queue_full_policy_options = 2;
+        gg_queue_full_policy_options = 2;
     pub const gg_queue_full_policy_options_GG_QUEUE_FULL_POLICY_RESERVED_PAD:
-    gg_queue_full_policy_options = 2147483647;
+        gg_queue_full_policy_options = 2147483647;
 
     pub type gg_queue_full_policy_options = u32;
 
@@ -239,7 +239,7 @@ pub mod test {
     }
 
     pub type gg_lambda_handler =
-    ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
+        ::std::option::Option<unsafe extern "C" fn(cxt: *const gg_lambda_context)>;
 
     pub extern "C" fn gg_runtime_start(handler: gg_lambda_handler, opt: u32) -> gg_error {
         let mut current_handler = GG_HANDLER.lock().unwrap();
@@ -255,12 +255,19 @@ pub mod test {
         if let Some(handler) = *locked {
             unsafe {
                 let function_arn_c = CString::new(ctx.function_arn).unwrap().into_raw();
-                let client_ctx_c = CString::new(ctx.client_context.as_str()).unwrap().into_raw();
+                let client_ctx_c = CString::new(ctx.client_context.as_str())
+                    .unwrap()
+                    .into_raw();
                 let ctx_c = Box::new(gg_lambda_context {
                     function_arn: function_arn_c,
                     client_context: client_ctx_c,
                 });
-                handler(Box::into_raw(ctx_c));
+                let raw = Box::into_raw(ctx_c);
+                handler(raw);
+                // make sure things are cleaned up
+                let _ = Box::from_raw(raw);
+                let _ = CString::from_raw(function_arn_c);
+                let _ = CString::from_raw(client_ctx_c);
             }
         }
     }
@@ -303,13 +310,11 @@ pub mod test {
         response: *const ::std::os::raw::c_void,
         response_size: usize,
     ) -> gg_error {
-        GG_LAMBDA_HANDLER_WRITE_RESPONSE.with(|rc| {
-            unsafe {
-                let mut dst: Vec<u8> = Vec::with_capacity(response_size);
-                dst.set_len(response_size);
-                std::ptr::copy(response as *const u8, dst.as_mut_ptr(), response_size);
-                rc.replace(dst);
-            }
+        GG_LAMBDA_HANDLER_WRITE_RESPONSE.with(|rc| unsafe {
+            let mut dst: Vec<u8> = Vec::with_capacity(response_size);
+            dst.set_len(response_size);
+            std::ptr::copy(response as *const u8, dst.as_mut_ptr(), response_size);
+            rc.replace(dst);
         });
         gg_error_GGE_SUCCESS
     }
@@ -317,11 +322,12 @@ pub mod test {
     pub extern "C" fn gg_lambda_handler_write_error(
         error_message: *const ::std::os::raw::c_char,
     ) -> gg_error {
-        GG_LAMBDA_HANDLER_WRITE_ERROR.with(|rc| {
-            unsafe {
-                let msg = CStr::from_ptr(error_message).to_owned().into_string().unwrap();
-                rc.replace(msg);
-            }
+        GG_LAMBDA_HANDLER_WRITE_ERROR.with(|rc| unsafe {
+            let msg = CStr::from_ptr(error_message)
+                .to_owned()
+                .into_string()
+                .unwrap();
+            rc.replace(msg);
         });
         gg_error_GGE_SUCCESS
     }
@@ -424,7 +430,7 @@ pub mod test {
                             .to_owned()
                             .into_bytes(),
                     )
-                        .unwrap(),
+                    .unwrap(),
                     qualifier: CStr::from_ptr((*opts).qualifier)
                         .to_owned()
                         .into_string()
@@ -584,4 +590,3 @@ mod bindings_test {
     // This is to make sure binding tests are still run
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
-

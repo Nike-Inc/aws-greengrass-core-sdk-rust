@@ -173,16 +173,12 @@ impl LambdaClient {
     pub fn send_response(&self, result: Result<&[u8], &str>) -> GGResult<()> {
         log::warn!("Mock send_response is being executed!!! This should not happen in prod!!!!");
         let r = result.map(|a| a.to_vec()).map_err(|s| s.to_owned());
-        self.mocks
-            .send_response_inputs
-            .borrow_mut()
-            .push(r);
+        self.mocks.send_response_inputs.borrow_mut().push(r);
         if let Some(output) = self.mocks.send_response_outputs.borrow_mut().pop() {
             output
         } else {
             Ok(())
         }
-
     }
 
     /// When the mock feature is turned on this will contain captured inputs and return
@@ -269,7 +265,9 @@ fn invoke<C: Serialize, P: AsRef<[u8]>>(
             let mut res = gg_request_result {
                 request_status: gg_request_status_GG_REQUEST_SUCCESS,
             };
-            let invoke_res = gg_invoke(req, Box::into_raw(options_c), &mut res);
+            let raw_options = Box::into_raw(options_c);
+            let invoke_res = gg_invoke(req, raw_options, &mut res);
+            let _ = Box::from_raw(raw_options); // cleanup
             GGError::from_code(invoke_res)?;
 
             match invoke_type {
@@ -500,7 +498,9 @@ mod test {
     #[cfg(not(feature = "mock"))]
     fn test_send_response() {
         let my_succesful_response = b"response is here";
-        LambdaClient::default().send_response(Ok(my_succesful_response)).unwrap();
+        LambdaClient::default()
+            .send_response(Ok(my_succesful_response))
+            .unwrap();
         GG_LAMBDA_HANDLER_WRITE_RESPONSE.with(|rc| {
             assert_eq!(*rc.borrow(), my_succesful_response);
         });
@@ -510,11 +510,11 @@ mod test {
     #[cfg(not(feature = "mock"))]
     fn test_send_err_response() {
         let my_err_response = "error response is here";
-        LambdaClient::default().send_response(Err(my_err_response)).unwrap();
+        LambdaClient::default()
+            .send_response(Err(my_err_response))
+            .unwrap();
         GG_LAMBDA_HANDLER_WRITE_ERROR.with(|rc| {
             assert_eq!(*rc.borrow(), my_err_response);
         });
     }
-
-
 }

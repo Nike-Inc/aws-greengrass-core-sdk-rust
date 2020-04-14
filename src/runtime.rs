@@ -200,11 +200,11 @@ impl ChannelHolder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::ffi::CString;
     use crate::handler::{Handler, LambdaContext};
     use crate::Initializer;
+    use crossbeam_channel::{bounded, Sender};
+    use std::ffi::CString;
     use std::time::Duration;
-    use crossbeam_channel::{Sender, bounded};
 
     #[test]
     fn test_build_context() {
@@ -223,7 +223,10 @@ mod test {
                 client_context: client_ctx_c.as_ptr(),
             });
 
-            let context = build_context(Box::into_raw(lambda_context_c)).unwrap();
+            let raw_ctx = Box::into_raw(lambda_context_c);
+            let context_result = build_context(raw_ctx);
+            let _ = Box::from_raw(raw_ctx);
+            let context = context_result.expect("Building a context should be successful");
 
             assert_eq!(context.function_arn, my_function_arn);
             assert_eq!(context.client_context, client_ctx);
@@ -233,14 +236,12 @@ mod test {
 
     #[derive(Clone)]
     struct TestHandler {
-        sender: Sender<LambdaContext>
+        sender: Sender<LambdaContext>,
     }
 
     impl TestHandler {
         fn new(sender: Sender<LambdaContext>) -> Self {
-            TestHandler {
-                sender
-            }
+            TestHandler { sender }
         }
     }
 
@@ -256,13 +257,23 @@ mod test {
         reset_test_state();
         let (sender, receiver) = bounded(1);
         let handler = TestHandler::new(sender);
-        let runtime = Runtime::default().with_runtime_option(RuntimeOption::Sync).with_handler(Some(Box::new(handler.clone())));
-        Initializer::default().with_runtime(runtime).init().expect("Initialization failed");
-        let context = LambdaContext::new("my_function_arn".to_owned(), "my_context".to_owned(), b"my bytes".to_ascii_lowercase());
+        let runtime = Runtime::default()
+            .with_runtime_option(RuntimeOption::Sync)
+            .with_handler(Some(Box::new(handler.clone())));
+        Initializer::default()
+            .with_runtime(runtime)
+            .init()
+            .expect("Initialization failed");
+        let context = LambdaContext::new(
+            "my_function_arn".to_owned(),
+            "my_context".to_owned(),
+            b"my bytes".to_ascii_lowercase(),
+        );
         send_to_handler(context.clone());
         // a long time out in order to ensure that it will succeed when testing with coverage
-        let ctx = receiver.recv_timeout(Duration::from_secs(120)).expect("Context was sent within the timeout period");
+        let ctx = receiver
+            .recv_timeout(Duration::from_secs(120))
+            .expect("Context was sent within the timeout period");
         assert_eq!(ctx, context);
     }
 }
-

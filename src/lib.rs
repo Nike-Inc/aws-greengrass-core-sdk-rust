@@ -18,13 +18,11 @@
 //!     }
 //! }
 //!
-//! pub fn main() {
-//!     gglog::init_log(LevelFilter::Info);
-//!     let runtime = Runtime::default().with_handler(Some(Box::new(HelloHandler)));
-//!     if let Err(e) = Initializer::default().with_runtime(runtime).init() {
-//!         error!("Initialization failed: {}", e);
-//!         std::process::exit(1);
-//!     }
+//! gglog::init_log(LevelFilter::Info);
+//! let runtime = Runtime::default().with_handler(Some(Box::new(HelloHandler)));
+//! if let Err(e) = Initializer::default().with_runtime(runtime).init() {
+//!     error!("Initialization failed: {}", e);
+//!     std::process::exit(1);
 //! }
 //! ```
 #![allow(unused_unsafe)] // because the test bindings will complain otherwise
@@ -137,4 +135,3 @@ pub mod test {
         }
     }
 }
-

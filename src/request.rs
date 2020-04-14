@@ -132,23 +132,29 @@ impl GGRequestResponse {
             // which might not be an error at all.
             // This best we can do is log
             Ok(data) if data.is_empty() => {
-                warn!("Could not find an error response for non Success request of {:?}", self.request_status);
-                return ErrorState::None
-            },
+                warn!(
+                    "Could not find an error response for non Success request of {:?}",
+                    self.request_status
+                );
+                return ErrorState::None;
+            }
             Ok(data) => data,
             Err(e) => {
-                error!("An error occurred attempting to read error response data: {}", e);
-                return ErrorState::Error(e)
+                error!(
+                    "An error occurred attempting to read error response data: {}",
+                    e
+                );
+                return ErrorState::Error(e);
             }
         };
 
         let err_resp = match ErrorResponse::try_from(response_data.as_slice()) {
             Ok(resp) => resp,
             // A parsing error occurred
-            Err(e) => return ErrorState::Error(e)
+            Err(e) => return ErrorState::Error(e),
         };
 
-         match err_resp.code {
+        match err_resp.code {
             404 => ErrorState::NotFoundError,
             401 => ErrorState::Error(GGError::Unauthorized(err_resp.message)),
             _ => ErrorState::Error(GGError::ErrorResponse(self.clone())),
@@ -296,11 +302,26 @@ Parturient montes nascetur ridiculus mus mauris vitae ultricies. Suspendisse sed
 
     #[test]
     fn test_try_from_gg_request_status() {
-        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_SUCCESS).unwrap(), GGRequestStatus::Success);
-        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_HANDLED).unwrap(), GGRequestStatus::Handled);
-        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_UNHANDLED).unwrap(), GGRequestStatus::Unhandled);
-        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_UNKNOWN).unwrap(), GGRequestStatus::Unknown);
-        assert_eq!(GGRequestStatus::try_from(gg_request_status_GG_REQUEST_AGAIN).unwrap(), GGRequestStatus::Again);
+        assert_eq!(
+            GGRequestStatus::try_from(gg_request_status_GG_REQUEST_SUCCESS).unwrap(),
+            GGRequestStatus::Success
+        );
+        assert_eq!(
+            GGRequestStatus::try_from(gg_request_status_GG_REQUEST_HANDLED).unwrap(),
+            GGRequestStatus::Handled
+        );
+        assert_eq!(
+            GGRequestStatus::try_from(gg_request_status_GG_REQUEST_UNHANDLED).unwrap(),
+            GGRequestStatus::Unhandled
+        );
+        assert_eq!(
+            GGRequestStatus::try_from(gg_request_status_GG_REQUEST_UNKNOWN).unwrap(),
+            GGRequestStatus::Unknown
+        );
+        assert_eq!(
+            GGRequestStatus::try_from(gg_request_status_GG_REQUEST_AGAIN).unwrap(),
+            GGRequestStatus::Again
+        );
         assert!(GGRequestStatus::try_from(9999).is_err());
     }
 }

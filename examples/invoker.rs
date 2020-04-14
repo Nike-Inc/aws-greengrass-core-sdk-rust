@@ -20,16 +20,16 @@
 //! ```shell script
 //! aws lambda list-versions-by-function --function-name <function name> --output yaml
 //! ```
-use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
-use aws_greengrass_core_rust::lambda::{LambdaClient, InvokeOptions};
-use aws_greengrass_core_rust::{GGResult, Initializer};
 use aws_greengrass_core_rust::error::GGError;
+use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
+use aws_greengrass_core_rust::iotdata::IOTDataClient;
+use aws_greengrass_core_rust::lambda::{InvokeOptions, LambdaClient};
 use aws_greengrass_core_rust::log as gg_log;
+use aws_greengrass_core_rust::runtime::Runtime;
+use aws_greengrass_core_rust::{GGResult, Initializer};
+use log::{error, info, LevelFilter};
 use serde::Deserialize;
 use serde_json::Value;
-use aws_greengrass_core_rust::iotdata::IOTDataClient;
-use aws_greengrass_core_rust::runtime::Runtime;
-use log::{info, error, LevelFilter};
 
 pub fn main() {
     gg_log::init_log(LevelFilter::Debug);
@@ -56,12 +56,14 @@ fn invoke(event: &[u8]) -> GGResult<()> {
     info!("Received event: {:?}", req);
     let options = build_invoke_options(&req)?;
     info!("Attempting to invoke {:?} with {:?}", options, req.payload);
-    let resp = LambdaClient::default()
-        .invoke_sync(options, Some(req.payload))?;
+    let resp = LambdaClient::default().invoke_sync(options, Some(req.payload))?;
     if let Some(resp) = resp {
         // convert the payload to a string for logging purposes
         let payload = String::from_utf8(resp).map_err(GGError::from)?;
-        info!("Responding to topic: {} with payload {}", req.response_topic, payload);
+        info!(
+            "Responding to topic: {} with payload {}",
+            req.response_topic, payload
+        );
         IOTDataClient::default().publish(&req.response_topic, payload)?;
     }
     Ok(())
@@ -74,7 +76,6 @@ fn build_invoke_options(req: &InvokeRequest) -> GGResult<InvokeOptions<Value>> {
     Ok(opts)
 }
 
-
 /// Represents the json request that this lambda will respond too
 #[derive(Deserialize, Debug)]
 struct InvokeRequest {
@@ -85,10 +86,7 @@ struct InvokeRequest {
 }
 
 impl InvokeRequest {
-
     fn from_slice(slice: &[u8]) -> GGResult<Self> {
-        serde_json::from_slice(slice)
-            .map_err(GGError::from)
+        serde_json::from_slice(slice).map_err(GGError::from)
     }
-
 }

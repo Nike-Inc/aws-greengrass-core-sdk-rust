@@ -1,9 +1,9 @@
 //! This is a simple example that will just send a message to an MQTT topic when it is run.
-use aws_greengrass_core_rust::Initializer;
-use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
-use log::{info, error, LevelFilter};
+use aws_greengrass_core_rust::log as gglog;
 use aws_greengrass_core_rust::runtime::Runtime;
+use aws_greengrass_core_rust::Initializer;
+use log::{error, info, LevelFilter};
 
 struct HelloHandler;
 

@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+
 //! Provides the ability to acquire secrets that have been registered with the Greengrass group
 //! that the lambda function has been configured to run in.
 

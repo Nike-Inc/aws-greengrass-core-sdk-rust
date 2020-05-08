@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+
 //! An on-demand lambda function that will manipulate a specified thing's shadow document.
 //! This lambda will listen on an MQTT topic for a json command body. The following actions can be performed:
 //!

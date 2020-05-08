@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+
 //! A Simple On Demand Lambda that registers a handler that listens to one MQTT topic and responds to another
 use aws_greengrass_core_rust::handler::{Handler, LambdaContext};
 use aws_greengrass_core_rust::iotdata::IOTDataClient;

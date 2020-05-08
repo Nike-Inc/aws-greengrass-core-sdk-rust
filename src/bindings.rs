@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+ 
 #![allow(dead_code, improper_ctypes, unused_variables, non_upper_case_globals, non_camel_case_types,
 non_snake_case, clippy::all)]
 //! This module encapsulates the bindings for the C library

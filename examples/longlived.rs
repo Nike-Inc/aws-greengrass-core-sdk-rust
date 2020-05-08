@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+
 //! An example of a long-lived green grass lambda.
 //! This example creates an http endpoint on the greengrass device. It will then forward
 //! messages it receives to the MQTT topic longlived/device-sent.

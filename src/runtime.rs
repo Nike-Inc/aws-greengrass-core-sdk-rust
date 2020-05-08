@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+
 use crate::bindings::*;
 use crate::error::GGError;
 use crate::handler::{Handler, LambdaContext};

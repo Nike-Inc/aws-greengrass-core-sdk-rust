@@ -1,3 +1,11 @@
+/*
+ * Copyright 2020-present, Nike, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the Apache-2.0 license found in
+ * the LICENSE file in the root of this source tree.
+ */
+
 //! Provides utilities for working with handling green grass response objects.
 //! Generally consumers of the API will not use items in this module, except in error cases.
 //! In error cases the GGRequestResponse struct will be embedded in the the GGError::ErrorResponse.

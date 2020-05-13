@@ -4,7 +4,7 @@ description = "Provides an idiomatic Rust wrapper around the AWS Greengrass Core
 version = "0.1.35"
 authors = ["Pete Matern <pete.matern@nike.com>", "Jack Wright <jack.wright@nike.com>"]
 edition = "2018"
-license-file = "LICENSE"
+license = "Apache-2.0"
 build = "build.rs"
 
 [features]

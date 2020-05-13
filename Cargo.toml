@@ -1,5 +1,6 @@
 [package]
 name = "aws_greengrass_core_rust"
+description = "Provides an idiomatic Rust wrapper around the AWS Greengrass Core C SDK to more easily enable Greengrass native lambda functions in Rust."
 version = "0.1.34"
 authors = ["Pete Matern <pete.matern@nike.com", "Jack Wright <jack.wright@nike.com>"]
 edition = "2018"

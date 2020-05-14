@@ -46,7 +46,7 @@ To Install:
 [//]: <> ("Update from git url to version once published to crates.io")
 Additionally, defined the logging crate
 ```toml
-aws_greengrass_core_rust = { git = "ssh://git@github.nike.com/awri10/aws-greengrass-core-sdk-rust.git" }
+aws_greengrass_core_rust = "0.1.36"
 log = "^0.4"
 ```
  

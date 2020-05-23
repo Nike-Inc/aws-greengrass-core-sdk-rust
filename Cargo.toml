@@ -16,6 +16,7 @@ coverage = [ "uuid" ]
 
 [build-dependencies]
 bindgen = "0.52.0"
+cmake = "0.1"
 
 [dependencies]
 log = "^0.4"

@@ -191,6 +191,12 @@ cargo +nightly test --features coverage
 grcov ./target/debug/ -s . -t html --llvm --branch --ignore-not-existing -o ./target/debug/coverage/
 ```
 
+### Cross compilation ###
+
+```shell script
+AWS_GREENGRASS_STUBS=yes CMAKE_TOOLCHAIN_FILE=$(pwd)/linux-gnu-x86_64.cmake cargo build --target=x86_64-unknown-linux-gnu
+```
+
 ### Coverage with [Jetbrains CLion](https://www.jetbrains.com/clion/)
 1. Create a run coverage named Test
 2. Set the command to be: ```test --features coverage```

@@ -9,7 +9,7 @@
 //! Provices an idiomatic Rust API on top of the AWS GreenGrass Core C SDK
 //!
 //! # Quick Start
-//! ```rust
+//! ```no_run
 //! use aws_greengrass_core_rust::Initializer;
 //! use aws_greengrass_core_rust::log as gglog;
 //! use aws_greengrass_core_rust::handler::{Handler, LambdaContext};

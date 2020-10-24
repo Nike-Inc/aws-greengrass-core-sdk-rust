@@ -9,7 +9,7 @@
 //! Provides the ability to publish MQTT topics
 use log::info;
 use serde::ser::Serialize;
-use std::convert::TryFrom;
+use std::convert::{TryInto, TryFrom};
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
@@ -102,7 +102,7 @@ impl IOTDataClient {
     /// Allows publishing a message of anything that implements AsRef<[u8]> to be published
     pub fn publish<T: AsRef<[u8]>>(&self, topic: &str, message: T) -> GGResult<()> {
         let as_bytes = message.as_ref();
-        let size = as_bytes.len();
+        let size = as_bytes.len().try_into().map_err(GGError::from)?;
         self.publish_raw(topic, as_bytes, size)
     }
 
@@ -114,14 +114,14 @@ impl IOTDataClient {
 
     /// Raw publish method that wraps gg_request_init, gg_publish
     #[cfg(not(all(test, feature = "mock")))]
-    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
+    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: u64) -> GGResult<()> {
         self.publish_with_options(topic, buffer, read)
     }
 
     /// This wraps publish_internal and will set any publish options if publish options were specified
     /// The primary reason this is a separate function from publish_internal is to ensure that if
     /// options is specified we clean up the pointer we create on error
-    fn publish_with_options(&self, topic: &str, buffer: &[u8], read: usize) -> GGResult<()> {
+    fn publish_with_options(&self, topic: &str, buffer: &[u8], read: u64) -> GGResult<()> {
         unsafe {
             // If options were defined, initialize the options pointer and
             // set queue policy
@@ -160,7 +160,7 @@ impl IOTDataClient {
         &self,
         topic: &str,
         buffer: &[u8],
-        read: usize,
+        read: u64,
         options_tuple: Option<gg_publish_options>,
     ) -> GGResult<()> {
         info!("Publishing message of length {} to topic {}", read, topic);

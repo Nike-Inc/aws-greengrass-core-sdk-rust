@@ -54,6 +54,8 @@ pub enum GGError {
     /// If the error is a 404, it should be handled as an Option instead. Otherwise
     /// this error type can be returned.
     ErrorResponse(GGRequestResponse),
+    /// For conversion errors like std::num::TryFromIntError
+    ConversionError(String)
 }
 
 impl GGError {
@@ -102,6 +104,7 @@ impl fmt::Display for GGError {
             Self::InvalidString(ref e) => write!(f, "Invalid String: {}", e),
             Self::Unauthorized(ref s) => write!(f, "{}", s),
             Self::ErrorResponse(ref r) => write!(f, "Green responded with error: {:?}", r),
+            Self::ConversionError(ref s ) => write!(f, "{}", s),
         }
     }
 }
@@ -151,6 +154,12 @@ impl From<FromUtf8Error> for GGError {
 impl From<SerdeError> for GGError {
     fn from(e: SerdeError) -> Self {
         Self::JsonError(e)
+    }
+}
+
+impl From<std::num::TryFromIntError> for GGError {
+    fn from(e: std::num::TryFromIntError) -> Self {
+        Self::ConversionError(format!("{}", e))
     }
 }
 

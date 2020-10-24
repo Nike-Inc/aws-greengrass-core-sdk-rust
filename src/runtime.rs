@@ -18,6 +18,7 @@ use std::ffi::CStr;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use std::thread;
+use std::convert::TryInto;
 
 /// The size of the buffer for reading content received via the C SDK
 const BUFFER_SIZE: usize = 100;
@@ -158,18 +159,20 @@ unsafe fn build_context(c_ctx: *const gg_lambda_context) -> GGResult<LambdaConte
 unsafe fn handler_read_message() -> GGResult<Vec<u8>> {
     let mut collected: Vec<u8> = Vec::new();
     loop {
-        let mut buffer = [0u8; BUFFER_SIZE];
-        let mut read: usize = 0;
+        let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+        let mut read: size_t = 0;
 
-        let raw_read = &mut read as *mut usize;
+        let raw_read = &mut read as *mut size_t;
 
+        let buff_size_t = BUFFER_SIZE.try_into().map_err(GGError::from)?;
         let pub_res =
-            gg_lambda_handler_read(buffer.as_mut_ptr() as *mut c_void, BUFFER_SIZE, raw_read);
+            gg_lambda_handler_read(buffer.as_mut_ptr() as *mut c_void, buff_size_t, raw_read);
 
         GGError::from_code(pub_res)?;
 
         if read > 0 {
-            collected.extend_from_slice(&buffer[..read]);
+            let read_usize = read.try_into().map_err(GGError::from)?;
+            collected.extend_from_slice(&buffer[..read_usize]);
         } else {
             break;
         }

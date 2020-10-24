@@ -9,7 +9,7 @@
 use base64::encode;
 use serde::Serialize;
 use serde_json;
-use std::convert::TryFrom;
+use std::convert::{TryInto, TryFrom};
 use std::default::Default;
 use std::ffi::CString;
 use std::os::raw::c_void;
@@ -254,7 +254,7 @@ fn invoke<C: Serialize, P: AsRef<[u8]>>(
         let qualifier_c = CString::new(option.qualifier.as_str()).map_err(GGError::from)?;
         let payload_bytes = payload.as_ref().map(|p| p.as_ref());
         let (payload_c, payload_size) = if let Some(p) = payload_bytes {
-            (p as *const _ as *const c_void, p.len())
+            (p as *const _ as *const c_void, p.len().try_into().map_err(GGError::from)?)
         } else {
             (ptr::null(), 0)
         };
@@ -291,7 +291,8 @@ fn invoke<C: Serialize, P: AsRef<[u8]>>(
 
 unsafe fn write_lambda_response(buffer: &[u8]) -> GGResult<()> {
     let buffer_c = buffer as *const _ as *const c_void;
-    let resp = gg_lambda_handler_write_response(buffer_c, buffer.len());
+    let size = buffer.len().try_into().map_err(GGError::from)?;
+    let resp = gg_lambda_handler_write_response(buffer_c, size);
     GGError::from_code(resp)
 }
 

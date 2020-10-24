@@ -41,6 +41,8 @@ pub mod test {
     use std::thread_local;
     use uuid::Uuid;
 
+    pub type size_t = ::std::os::raw::c_long;
+
     lazy_static! {
         // This could problems if more than than one test is accessing. Try to limit usage.
         pub(crate) static ref GG_HANDLER: Mutex<gg_lambda_handler> = Mutex::new(None);
@@ -208,8 +210,8 @@ pub mod test {
     pub extern "C" fn gg_request_read(
         ggreq: gg_request,
         buffer: *mut ::std::os::raw::c_void,
-        buffer_size: usize,
-        amount_read: *mut usize,
+        buffer_size: size_t,
+        amount_read: *mut size_t,
     ) -> gg_error {
         unsafe {
             GG_REQUEST_READ_BUFFER.with(|b| {
@@ -220,7 +222,7 @@ pub mod test {
                 } else {
                     // Find the index to split the array off at
                     let index = if buffer_size > borrowed.len() {
-                        borrowed.len()
+                        borrowed.len().try_into().unwrap()
                     } else {
                         buffer_size
                     };
@@ -282,8 +284,8 @@ pub mod test {
 
     pub extern "C" fn gg_lambda_handler_read(
         buffer: *mut ::std::os::raw::c_void,
-        buffer_size: usize,
-        amount_read: *mut usize,
+        buffer_size: size_t,
+        amount_read: *mut size_t
     ) -> gg_error {
         unsafe {
             GG_LAMBDA_HANDLER_READ_BUFFER.with(|b| {
@@ -293,10 +295,11 @@ pub mod test {
                     amount_read.write(0);
                 } else {
                     // Find the index to split the array off at
-                    let index = if buffer_size > borrowed.len() {
-                        borrowed.len()
+                    let borrowed_len = borrowed.len().try_into().unwrap();
+                    let index = if buffer_size > borrowed_len {
+                        borrowed_len
                     } else {
-                        buffer_size
+                        buffer_size.try_into().unwrap()
                     };
                     // borrowed will now contain everything up to index
                     let next = borrowed.split_off(index);
@@ -305,7 +308,7 @@ pub mod test {
                         borrowed.as_ptr() as *const c_void,
                         borrowed.len(),
                     );
-                    amount_read.write(borrowed.len());
+                    amount_read.write(borrowed_len);
                     // replace the refcell with the rest of the vec
                     b.replace(next);
                 }

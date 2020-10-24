@@ -34,7 +34,7 @@ use crate::error::GGError;
 use crate::GGResult;
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::default::Default;
 use std::ffi::c_void;
 
@@ -233,19 +233,21 @@ fn read_response_data(req_to_read: gg_request) -> Result<Vec<u8>, GGError> {
     unsafe {
         loop {
             let mut buffer = [0u8; BUFFER_SIZE];
-            let mut read: usize = 0;
-            let raw_read = &mut read as *mut usize;
+            let mut read: size_t = 0;
+            let raw_read = &mut read as *mut size_t;
 
+            let buff_size_t = BUFFER_SIZE.try_into().map_err(GGError::from)?;
             let read_res = gg_request_read(
                 req_to_read,
                 buffer.as_mut_ptr() as *mut c_void,
-                BUFFER_SIZE,
+                buff_size_t,
                 raw_read,
             );
             GGError::from_code(read_res)?;
 
             if read > 0 {
-                bytes.extend_from_slice(&buffer[..read]);
+                let read_usize = read.try_into().map_err(GGError::from)?;
+                bytes.extend_from_slice(&buffer[..read_usize]);
             } else {
                 break;
             }

@@ -291,7 +291,7 @@ fn invoke<C: Serialize, P: AsRef<[u8]>>(
 
 unsafe fn write_lambda_response(buffer: &[u8]) -> GGResult<()> {
     let buffer_c = buffer as *const _ as *const c_void;
-    let size = buffer.len().try_into().map_err(GGError::from)?;
+    let size: size_t = buffer.len().try_into().map_err(GGError::from)?;
     let resp = gg_lambda_handler_write_response(buffer_c, size);
     GGError::from_code(resp)
 }

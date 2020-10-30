@@ -114,14 +114,14 @@ impl IOTDataClient {
 
     /// Raw publish method that wraps gg_request_init, gg_publish
     #[cfg(not(all(test, feature = "mock")))]
-    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: u64) -> GGResult<()> {
+    pub fn publish_raw(&self, topic: &str, buffer: &[u8], read: size_t) -> GGResult<()> {
         self.publish_with_options(topic, buffer, read)
     }
 
     /// This wraps publish_internal and will set any publish options if publish options were specified
     /// The primary reason this is a separate function from publish_internal is to ensure that if
     /// options is specified we clean up the pointer we create on error
-    fn publish_with_options(&self, topic: &str, buffer: &[u8], read: u64) -> GGResult<()> {
+    fn publish_with_options(&self, topic: &str, buffer: &[u8], read: size_t) -> GGResult<()> {
         unsafe {
             // If options were defined, initialize the options pointer and
             // set queue policy
@@ -160,7 +160,7 @@ impl IOTDataClient {
         &self,
         topic: &str,
         buffer: &[u8],
-        read: u64,
+        read: size_t,
         options_tuple: Option<gg_publish_options>,
     ) -> GGResult<()> {
         info!("Publishing message of length {} to topic {}", read, topic);
@@ -324,14 +324,15 @@ mod test {
         reset_test_state();
         let topic = "my_topic";
         let my_payload = b"This is my payload.";
+        let my_payload_len = my_payload.len().try_into().unwrap();
         IOTDataClient::default()
-            .publish_raw(topic, my_payload, my_payload.len())
+            .publish_raw(topic, my_payload, my_payload_len)
             .unwrap();
         GG_PUBLISH_ARGS.with(|ref_cell| {
             let args = ref_cell.borrow();
             assert_eq!(args.topic, topic);
             assert_eq!(args.payload, my_payload);
-            assert_eq!(args.payload_size, my_payload.len());
+            assert_eq!(args.payload_size, my_payload_len);
         });
         GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));
@@ -351,9 +352,10 @@ mod test {
         GG_PUBLISH_WITH_OPTIONS_ARGS.with(|rc| {
             let args = rc.borrow();
             let my_payload_as_bytes = serde_json::to_vec(&my_payload).unwrap();
+            let my_payload_len: size_t = my_payload_as_bytes.len().try_into().unwrap();
             assert_eq!(args.topic, topic);
             assert_eq!(args.payload, my_payload_as_bytes);
-            assert_eq!(args.payload_size, my_payload_as_bytes.len());
+            assert_eq!(args.payload_size, my_payload_len);
         });
         GG_CLOSE_REQUEST_COUNT.with(|rc| assert_eq!(*rc.borrow(), 1));
         GG_REQUEST.with(|rc| assert!(!rc.borrow().is_default()));

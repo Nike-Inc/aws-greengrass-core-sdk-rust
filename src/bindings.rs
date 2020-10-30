@@ -34,7 +34,7 @@ pub mod test {
     use base64;
     use lazy_static::lazy_static;
     use std::cell::RefCell;
-    use std::convert::TryFrom;
+    use std::convert::{TryFrom, TryInto};
     use std::ffi::{CStr, CString};
     use std::os::raw::c_void;
     use std::sync::Mutex;
@@ -221,19 +221,23 @@ pub mod test {
                     amount_read.write(0);
                 } else {
                     // Find the index to split the array off at
-                    let index = if buffer_size > borrowed.len() {
-                        borrowed.len().try_into().unwrap()
+                    let borrowed_len_usize = borrowed.len();
+                    let borrowed_len_size_t = borrowed_len_usize.try_into().unwrap();
+                    let (index_usize, index_size_t) = if buffer_size > borrowed_len_size_t {
+                        (borrowed_len_usize, borrowed_len_size_t)
                     } else {
-                        buffer_size
+                        (buffer_size.try_into().unwrap(), buffer_size)
                     };
+                    assert!(index_usize <= borrowed_len_usize);
+                    assert!(index_size_t <= borrowed_len_size_t);
                     // borrowed will now contain everything up to index
-                    let next = borrowed.split_off(index);
+                    let next = borrowed.split_off(index_usize);
                     println!("gg_request_read: writing buffer: {:?}", borrowed);
                     buffer.copy_from_nonoverlapping(
                         borrowed.as_ptr() as *const c_void,
                         borrowed.len(),
                     );
-                    amount_read.write(borrowed.len());
+                    amount_read.write(borrowed_len_size_t);
                     // replace the refcell with the rest of the vec
                     b.replace(next);
                 }
@@ -295,20 +299,21 @@ pub mod test {
                     amount_read.write(0);
                 } else {
                     // Find the index to split the array off at
-                    let borrowed_len = borrowed.len().try_into().unwrap();
-                    let index = if buffer_size > borrowed_len {
-                        borrowed_len
+                    let borrowed_len_usize = borrowed.len();
+                    let borrowed_len_size_t = borrowed_len_usize.try_into().unwrap();
+                    let (index_usize, index_size_t) = if buffer_size > borrowed_len_size_t {
+                        (borrowed_len_usize, borrowed_len_size_t)
                     } else {
-                        buffer_size.try_into().unwrap()
+                        (buffer_size.try_into().unwrap(), buffer_size)
                     };
                     // borrowed will now contain everything up to index
-                    let next = borrowed.split_off(index);
+                    let next = borrowed.split_off(index_usize);
                     println!("gg_lambda_handler_read: writing buffer: {:?}", borrowed);
                     buffer.copy_from_nonoverlapping(
                         borrowed.as_ptr() as *const c_void,
                         borrowed.len(),
                     );
-                    amount_read.write(borrowed_len);
+                    amount_read.write(borrowed_len_size_t);
                     // replace the refcell with the rest of the vec
                     b.replace(next);
                 }
@@ -319,12 +324,13 @@ pub mod test {
 
     pub extern "C" fn gg_lambda_handler_write_response(
         response: *const ::std::os::raw::c_void,
-        response_size: usize,
+        response_size: size_t,
     ) -> gg_error {
         GG_LAMBDA_HANDLER_WRITE_RESPONSE.with(|rc| unsafe {
-            let mut dst: Vec<u8> = Vec::with_capacity(response_size);
-            dst.set_len(response_size);
-            std::ptr::copy(response as *const u8, dst.as_mut_ptr(), response_size);
+            let repsonse_size_usize = response_size.try_into().unwrap();
+            let mut dst: Vec<u8> = Vec::with_capacity(repsonse_size_usize);
+            dst.set_len(repsonse_size_usize);
+            std::ptr::copy(response as *const u8, dst.as_mut_ptr(), repsonse_size_usize);
             rc.replace(dst);
         });
         gg_error_GGE_SUCCESS
@@ -404,7 +410,7 @@ pub mod test {
         pub qualifier: *const ::std::os::raw::c_char,
         pub type_: gg_invoke_type,
         pub payload: *const ::std::os::raw::c_void,
-        pub payload_size: usize,
+        pub payload_size: size_t,
     }
 
     #[derive(Debug, Default)]
@@ -423,12 +429,13 @@ pub mod test {
     ) -> gg_error {
         unsafe {
             GG_INVOKE_ARGS.with(|rc| {
-                let mut dst = Vec::with_capacity((*opts).payload_size);
-                dst.set_len((*opts).payload_size);
+                let payload_size_usize = (*opts).payload_size.try_into().unwrap();
+                let mut dst = Vec::with_capacity(payload_size_usize);
+                dst.set_len(payload_size_usize);
                 std::ptr::copy(
                     (*opts).payload as *const u8,
                     dst.as_mut_ptr(),
-                    (*opts).payload_size,
+                    payload_size_usize,
                 );
 
                 let args = GGInvokeArgs {
@@ -487,23 +494,24 @@ pub mod test {
     pub struct GGPublishPayloadArgs {
         pub topic: String,
         pub payload: Vec<u8>,
-        pub payload_size: usize,
+        pub payload_size: size_t,
     }
 
     pub extern "C" fn gg_publish_with_options(
         ggreq: gg_request,
         topic: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_void,
-        payload_size: usize,
+        payload_size: size_t,
         opts: gg_publish_options,
         result: *mut gg_request_result,
     ) -> gg_error {
         unsafe {
             GG_PUBLISH_WITH_OPTIONS_ARGS.with(|args| {
                 // read the void* payload pointer into a byte array
-                let mut dst = Vec::with_capacity(payload_size);
-                dst.set_len(payload_size);
-                std::ptr::copy(payload as *const u8, dst.as_mut_ptr(), payload_size);
+                let payload_size_usize = payload_size.try_into().unwrap();
+                let mut dst = Vec::with_capacity(payload_size_usize);
+                dst.set_len(payload_size_usize);
+                std::ptr::copy(payload as *const u8, dst.as_mut_ptr(), payload_size_usize);
 
                 let gg_args = GGPublishPayloadArgs {
                     topic: CStr::from_ptr(topic).to_owned().into_string().unwrap(),
@@ -521,15 +529,16 @@ pub mod test {
         ggreq: gg_request,
         topic: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_void,
-        payload_size: usize,
+        payload_size: size_t,
         result: *mut gg_request_result,
     ) -> gg_error {
         unsafe {
             GG_PUBLISH_ARGS.with(|args| {
                 // read the void* payload pointer into a byte array
-                let mut dst = Vec::with_capacity(payload_size);
-                dst.set_len(payload_size);
-                std::ptr::copy(payload as *const u8, dst.as_mut_ptr(), payload_size);
+                let payload_size_usize = payload_size.try_into().unwrap();
+                let mut dst = Vec::with_capacity(payload_size_usize);
+                dst.set_len(payload_size_usize);
+                std::ptr::copy(payload as *const u8, dst.as_mut_ptr(), payload_size_usize);
 
                 let gg_args = GGPublishPayloadArgs {
                     topic: CStr::from_ptr(topic).to_owned().into_string().unwrap(),

@@ -237,7 +237,7 @@ pub mod test {
                         borrowed.as_ptr() as *const c_void,
                         borrowed.len(),
                     );
-                    amount_read.write(borrowed_len_size_t);
+                    amount_read.write(index_size_t);
                     // replace the refcell with the rest of the vec
                     b.replace(next);
                 }
